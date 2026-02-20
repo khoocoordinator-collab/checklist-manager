@@ -5,7 +5,6 @@ import SignaturePad from './SignaturePad'
 function ChecklistForm({ checklist, team, onBack }) {
   const [items, setItems] = useState(checklist?.items || [])
   const [saved, setSaved] = useState(false)
-  const [activeNoteItem, setActiveNoteItem] = useState(null)
   const [activeFlagItem, setActiveFlagItem] = useState(null)
   const [flagDescription, setFlagDescription] = useState('')
   const [completedBy, setCompletedBy] = useState(checklist?.completed_by || '')
@@ -173,17 +172,6 @@ function ChecklistForm({ checklist, team, onBack }) {
     setSaved(false)
   }
 
-  const updateNotes = (itemId, noteText) => {
-    if (isReadOnly) return
-    setItems(prev => prev.map(item => {
-      if (item.id === itemId) {
-        return { ...item, notes: noteText }
-      }
-      return item
-    }))
-    setSaved(false)
-  }
-
   const handleSignatureSave = (sigData) => {
     setSignatureData({
       ...sigData,
@@ -233,14 +221,6 @@ function ChecklistForm({ checklist, team, onBack }) {
   const completedCount = items.filter(isItemComplete).length
   const progress = items.length > 0 ? (completedCount / items.length) * 100 : 0
   const allComplete = progress === 100
-
-  const openNotePopup = (itemId) => {
-    setActiveNoteItem(itemId)
-  }
-
-  const closeNotePopup = () => {
-    setActiveNoteItem(null)
-  }
 
   const openFlagPopup = (item) => {
     setActiveFlagItem(item.id)
@@ -338,52 +318,24 @@ function ChecklistForm({ checklist, team, onBack }) {
     event.target.value = ''
   }
 
-  // Clear flag via API
-  const clearFlag = async (itemId) => {
-    try {
-      await fetch(`${API_BASE}/api/clear-flag/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ item_id: itemId })
-      })
-      setItems(prev => prev.map(item => {
-        if (item.id === itemId) {
-          return { ...item, current_flag: null }
-        }
-        return item
-      }))
-    } catch (err) {
-      console.error('Clear flag error:', err)
-      alert('Network error clearing flag')
-    }
+const activeFlagItemData = items.find(i => i.id === activeFlagItem)
+
+  const renderFlagButton = (item) => {
+    if (isReadOnly && !item.current_flag) return null
+    const flagStatus = item.current_flag?.status
+    const flagColor = flagStatus === 'acknowledged' ? '#22c55e' : flagStatus === 'active' ? '#ef4444' : undefined
+    return (
+      <button
+        type="button"
+        onClick={() => openFlagPopup(item)}
+        title={item.current_flag ? (flagStatus === 'acknowledged' ? 'Acknowledged flag' : 'View flag') : 'Flag this item'}
+        className={`btn-note ${item.current_flag ? 'has-note' : ''}`}
+        style={{ marginLeft: '4px', color: flagColor }}
+      >
+        🚩
+      </button>
+    )
   }
-
-  const activeItem = items.find(i => i.id === activeNoteItem)
-  const activeFlagItemData = items.find(i => i.id === activeFlagItem)
-
-  const renderNoteButton = (item) => (
-    <button
-      type="button"
-      onClick={() => openNotePopup(item.id)}
-      title={item.notes ? 'View note' : 'Add note'}
-      disabled={isReadOnly}
-      className={`btn-note ${item.notes ? 'has-note' : ''}`}
-    >
-      📝
-    </button>
-  )
-
-  const renderFlagButton = (item) => (
-    <button
-      type="button"
-      onClick={() => openFlagPopup(item)}
-      title={item.current_flag ? 'View flag' : 'Flag this item'}
-      className={`btn-note ${item.current_flag ? 'has-note' : ''}`}
-      style={{ marginLeft: '4px' }}
-    >
-      🚩
-    </button>
-  )
 
   const renderResponseInput = (item, index) => {
     const isComplete = isItemComplete(item)
@@ -412,7 +364,6 @@ function ChecklistForm({ checklist, team, onBack }) {
           >
             N/A
           </button>
-          {renderNoteButton(item)}
           {renderFlagButton(item)}
         </div>
       )
@@ -429,7 +380,6 @@ function ChecklistForm({ checklist, team, onBack }) {
             disabled={isReadOnly}
             className={`item-input ${isComplete ? 'complete' : ''}`}
           />
-          {renderNoteButton(item)}
           {renderFlagButton(item)}
         </div>
       )
@@ -446,7 +396,6 @@ function ChecklistForm({ checklist, team, onBack }) {
             disabled={isReadOnly}
             className={`item-input ${isComplete ? 'complete' : ''}`}
           />
-          {renderNoteButton(item)}
           {renderFlagButton(item)}
         </div>
       )
@@ -486,7 +435,6 @@ function ChecklistForm({ checklist, team, onBack }) {
               {uploadingPhoto === item.id ? '⏳ Uploading...' : '📷 Take Photo'}
             </button>
           )}
-          {renderNoteButton(item)}
           {renderFlagButton(item)}
         </div>
       )
@@ -602,26 +550,6 @@ function ChecklistForm({ checklist, team, onBack }) {
         ))}
       </div>
 
-      {/* Note Modal */}
-      {activeItem && (
-        <div className="modal-overlay" onClick={closeNotePopup}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3>Note for Item</h3>
-            <p style={{ fontSize: '13px', color: '#666', marginBottom: '12px' }}>{activeItem.item_text}</p>
-            <textarea
-              value={activeItem.notes || ''}
-              onChange={(e) => updateNotes(activeItem.id, e.target.value)}
-              placeholder="Enter notes..."
-              autoFocus
-            />
-            <div className="modal-actions">
-              <button onClick={closeNotePopup} className="btn-secondary">Cancel</button>
-              <button onClick={closeNotePopup} className="btn-save" style={{ width: 'auto', padding: '8px 20px' }}>Save</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Flag Modal */}
       {activeFlagItemData && (
         <div className="modal-overlay" onClick={closeFlagPopup}>
@@ -633,19 +561,23 @@ function ChecklistForm({ checklist, team, onBack }) {
               onChange={(e) => setFlagDescription(e.target.value)}
               placeholder="Describe the issue..."
               autoFocus
+              readOnly={isReadOnly}
+              style={isReadOnly ? { background: '#f5f5f5', color: '#555' } : {}}
             />
 
             {/* Flag photo section */}
             <div style={{ marginTop: '12px' }}>
-              <input
-                type="file"
-                ref={el => flagPhotoInputRefs.current[activeFlagItemData.id] = el}
-                accept="image/*"
-                capture="environment"
-                onChange={(e) => handleFlagPhotoCapture(activeFlagItemData.id, e)}
-                disabled={uploadingFlagPhoto === activeFlagItemData.id}
-                style={{ display: 'none' }}
-              />
+              {!isReadOnly && (
+                <input
+                  type="file"
+                  ref={el => flagPhotoInputRefs.current[activeFlagItemData.id] = el}
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(e) => handleFlagPhotoCapture(activeFlagItemData.id, e)}
+                  disabled={uploadingFlagPhoto === activeFlagItemData.id}
+                  style={{ display: 'none' }}
+                />
+              )}
               {activeFlagItemData.current_flag?.photo_url ? (
                 <div style={{ marginBottom: '8px' }}>
                   <img
@@ -653,45 +585,51 @@ function ChecklistForm({ checklist, team, onBack }) {
                     alt="Flag evidence"
                     style={{ width: '100%', maxHeight: '160px', objectFit: 'cover', borderRadius: '6px' }}
                   />
+                  {!isReadOnly && (
+                    <button
+                      onClick={() => flagPhotoInputRefs.current[activeFlagItemData.id]?.click()}
+                      disabled={uploadingFlagPhoto === activeFlagItemData.id}
+                      className="btn-secondary"
+                      style={{ marginTop: '6px', width: '100%' }}
+                    >
+                      {uploadingFlagPhoto === activeFlagItemData.id ? '⏳ Uploading...' : '📷 Retake Photo'}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                !isReadOnly && (
                   <button
                     onClick={() => flagPhotoInputRefs.current[activeFlagItemData.id]?.click()}
                     disabled={uploadingFlagPhoto === activeFlagItemData.id}
                     className="btn-secondary"
-                    style={{ marginTop: '6px', width: '100%' }}
+                    style={{ width: '100%', marginBottom: '8px' }}
                   >
-                    {uploadingFlagPhoto === activeFlagItemData.id ? '⏳ Uploading...' : '📷 Retake Photo'}
+                    {uploadingFlagPhoto === activeFlagItemData.id ? '⏳ Uploading...' : '📷 Add Photo Evidence'}
                   </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => flagPhotoInputRefs.current[activeFlagItemData.id]?.click()}
-                  disabled={uploadingFlagPhoto === activeFlagItemData.id}
-                  className="btn-secondary"
-                  style={{ width: '100%', marginBottom: '8px' }}
-                >
-                  {uploadingFlagPhoto === activeFlagItemData.id ? '⏳ Uploading...' : '📷 Add Photo Evidence'}
-                </button>
+                )
               )}
             </div>
 
+            {isReadOnly && activeFlagItemData.current_flag?.status === 'acknowledged' && (
+              <div style={{ marginTop: '10px', padding: '8px 10px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', fontSize: '12px', color: '#16a34a' }}>
+                Acknowledged by <strong>{activeFlagItemData.current_flag.acknowledged_by}</strong>
+                {activeFlagItemData.current_flag.acknowledged_at && (
+                  <span> on {new Date(activeFlagItemData.current_flag.acknowledged_at).toLocaleString()}</span>
+                )}
+              </div>
+            )}
+
             <div className="modal-actions">
-              <button onClick={closeFlagPopup} className="btn-secondary">Cancel</button>
-              {activeFlagItemData.current_flag && (
+              <button onClick={closeFlagPopup} className="btn-secondary">Close</button>
+              {!isReadOnly && (
                 <button
-                  onClick={async () => { await clearFlag(activeFlagItemData.id); closeFlagPopup() }}
-                  className="btn-secondary btn-danger"
-                  style={{ width: 'auto', padding: '8px 16px' }}
+                  onClick={saveFlagDescription}
+                  className="btn-save"
+                  style={{ width: 'auto', padding: '8px 20px' }}
                 >
-                  Clear Flag
+                  Save Flag
                 </button>
               )}
-              <button
-                onClick={saveFlagDescription}
-                className="btn-save"
-                style={{ width: 'auto', padding: '8px 20px' }}
-              >
-                Save Flag
-              </button>
             </div>
           </div>
         </div>

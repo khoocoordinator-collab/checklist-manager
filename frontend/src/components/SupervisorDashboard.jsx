@@ -75,6 +75,10 @@ function SupervisorDashboard({ team, onLogout }) {
   const [selectedChecklist, setSelectedChecklist] = useState(null)
   const [supervisorName, setSupervisorName] = useState('')
   const [showSignaturePad, setShowSignaturePad] = useState(false)
+  const [signaturePadMode, setSignaturePadMode] = useState('verify') // 'verify' | 'acknowledge'
+  const [acknowledgeFlag, setAcknowledgeFlag] = useState(null) // flag object being acknowledged
+  const [acknowledgeName, setAcknowledgeName] = useState('')
+  const [acknowledgeMessage, setAcknowledgeMessage] = useState('')
   const [verifyMessage, setVerifyMessage] = useState('')
   const [enlargedPhoto, setEnlargedPhoto] = useState(null)
 
@@ -136,17 +140,41 @@ function SupervisorDashboard({ team, onLogout }) {
     setVerifyMessage('')
   }
 
-  const handleVerifyClick = () => {
-    if (!supervisorName.trim()) {
-      setVerifyMessage('Please enter your name before signing')
-      return
-    }
-    setShowSignaturePad(true)
-  }
-
   const handleSignatureSave = async (sigData) => {
     setShowSignaturePad(false)
 
+    if (signaturePadMode === 'acknowledge') {
+      try {
+        const response = await fetch(`${API_BASE}/api/acknowledge-flag/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            flag_id: acknowledgeFlag.flag_id,
+            acknowledged_by: acknowledgeName,
+            acknowledgement_signature: sigData.image_data
+          })
+        })
+
+        if (response.ok) {
+          setAcknowledgeMessage('✅ Flag acknowledged')
+          setAcknowledgeFlag(null)
+          setAcknowledgeName('')
+          setTimeout(() => {
+            setAcknowledgeMessage('')
+            loadData()
+          }, 1500)
+        } else {
+          const error = await response.json()
+          setAcknowledgeMessage(`❌ Error: ${error.error || 'Acknowledge failed'}`)
+        }
+      } catch (err) {
+        console.error('Acknowledge error:', err)
+        setAcknowledgeMessage('❌ Network error. Please try again.')
+      }
+      return
+    }
+
+    // verify mode
     try {
       const response = await fetch(`${API_BASE}/api/supervisor/verify/`, {
         method: 'POST',
@@ -177,6 +205,36 @@ function SupervisorDashboard({ team, onLogout }) {
 
   const handleSignatureCancel = () => {
     setShowSignaturePad(false)
+  }
+
+  const openAcknowledgeModal = (flag) => {
+    setAcknowledgeFlag(flag)
+    setAcknowledgeName('')
+    setAcknowledgeMessage('')
+  }
+
+  const closeAcknowledgeModal = () => {
+    setAcknowledgeFlag(null)
+    setAcknowledgeName('')
+    setAcknowledgeMessage('')
+  }
+
+  const handleAcknowledgeSign = () => {
+    if (!acknowledgeName.trim()) {
+      setAcknowledgeMessage('Please enter your name before signing')
+      return
+    }
+    setSignaturePadMode('acknowledge')
+    setShowSignaturePad(true)
+  }
+
+  const handleVerifyClick = () => {
+    if (!supervisorName.trim()) {
+      setVerifyMessage('Please enter your name before signing')
+      return
+    }
+    setSignaturePadMode('verify')
+    setShowSignaturePad(true)
   }
 
   const formatDate = (dateString) => {
@@ -271,7 +329,9 @@ function SupervisorDashboard({ team, onLogout }) {
               onClick={() => setActiveTab('reports')}
             >
               🚩 Flags
-              {flaggedItems.length > 0 && <span className="tab-badge">{flaggedItems.length}</span>}
+              {flaggedItems.filter(f => f.status === 'active').length > 0 && (
+                <span className="tab-badge">{flaggedItems.filter(f => f.status === 'active').length}</span>
+              )}
             </button>
           </div>
 
@@ -373,8 +433,14 @@ function SupervisorDashboard({ team, onLogout }) {
             ) : (
               <>
                 <div className="section-header">
-                  <h2>🚩 Active Flags</h2>
+                  <h2>🚩 Flags</h2>
                 </div>
+
+                {acknowledgeMessage && (
+                  <div className={`alert ${acknowledgeMessage.includes('✅') ? 'alert-success' : 'alert-error'}`}>
+                    {acknowledgeMessage}
+                  </div>
+                )}
 
                 {flaggedItems.length === 0 ? (
                   <div className="empty-state">
@@ -384,43 +450,102 @@ function SupervisorDashboard({ team, onLogout }) {
                   </div>
                 ) : (
                   <div className="checklist-list">
-                    {flaggedItems.map(flag => (
-                      <div key={flag.flag_id} className="checklist-card" style={{ borderLeft: '4px solid #ef4444' }}>
-                        <div className="checklist-card-inner">
-                          <div className="checklist-main">
-                            <h3 className="checklist-title" style={{ color: '#ef4444' }}>🚩 {flag.item_text}</h3>
-                            <div className="checklist-meta">
-                              <span>📋 {flag.checklist_title}</span>
-                              <span>📅 {flag.date_label}</span>
-                              <span>🏢 {flag.team_name}</span>
-                            </div>
-                            {flag.description && (
-                              <p style={{ margin: '6px 0 0', fontSize: '13px', color: '#555' }}>
-                                {flag.description}
-                              </p>
-                            )}
-                            {flag.photo_url && (
-                              <div style={{ marginTop: '8px' }}>
-                                <img
-                                  src={flag.photo_url}
-                                  alt="Flag evidence"
-                                  style={{ maxWidth: '120px', maxHeight: '90px', objectFit: 'cover', borderRadius: '6px', cursor: 'pointer' }}
-                                  onClick={() => openEnlargedPhoto(flag.photo_url)}
-                                />
+                    {flaggedItems.map(flag => {
+                      const isAcknowledged = flag.status === 'acknowledged'
+                      const borderColor = isAcknowledged ? '#22c55e' : '#ef4444'
+                      const badgeBg = isAcknowledged ? '#f0fdf4' : '#fef2f2'
+                      const badgeColor = isAcknowledged ? '#16a34a' : '#ef4444'
+                      const badgeBorder = isAcknowledged ? '#bbf7d0' : '#fecaca'
+                      return (
+                        <div key={flag.flag_id} className="checklist-card" style={{ borderLeft: `4px solid ${borderColor}` }}>
+                          <div className="checklist-card-inner">
+                            <div className="checklist-main">
+                              <h3 className="checklist-title" style={{ color: borderColor }}>🚩 {flag.item_text}</h3>
+                              <div className="checklist-meta">
+                                <span>📋 {flag.checklist_title}</span>
+                                <span>📅 {flag.date_label}</span>
+                                <span>🏢 {flag.team_name}</span>
                               </div>
-                            )}
-                          </div>
-                          <div className="checklist-status-col">
-                            <span className="status-badge" style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca' }}>
-                              Flagged
-                            </span>
-                            <span style={{ fontSize: '11px', color: '#888' }}>
-                              {formatDate(flag.flagged_at)}
-                            </span>
+                              {flag.description && (
+                                <p style={{ margin: '6px 0 0', fontSize: '13px', color: '#555' }}>
+                                  {flag.description}
+                                </p>
+                              )}
+                              {flag.photo_url && (
+                                <div style={{ marginTop: '8px' }}>
+                                  <img
+                                    src={flag.photo_url}
+                                    alt="Flag evidence"
+                                    style={{ maxWidth: '120px', maxHeight: '90px', objectFit: 'cover', borderRadius: '6px', cursor: 'pointer' }}
+                                    onClick={() => openEnlargedPhoto(flag.photo_url)}
+                                  />
+                                </div>
+                              )}
+                              {isAcknowledged && (
+                                <p style={{ margin: '6px 0 0', fontSize: '12px', color: '#16a34a' }}>
+                                  Acknowledged by <strong>{flag.acknowledged_by}</strong> on {formatDate(flag.acknowledged_at)}
+                                </p>
+                              )}
+                            </div>
+                            <div className="checklist-status-col">
+                              <span className="status-badge" style={{ background: badgeBg, color: badgeColor, border: `1px solid ${badgeBorder}` }}>
+                                {isAcknowledged ? 'Acknowledged' : 'Active'}
+                              </span>
+                              <span style={{ fontSize: '11px', color: '#888' }}>
+                                {formatDate(flag.flagged_at)}
+                              </span>
+                              {!isAcknowledged && (
+                                <button
+                                  className="btn-primary"
+                                  style={{ marginTop: '6px', fontSize: '12px', padding: '6px 10px' }}
+                                  onClick={() => openAcknowledgeModal(flag)}
+                                >
+                                  Acknowledge
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* Acknowledge Modal */}
+                {acknowledgeFlag && (
+                  <div className="modal-overlay" onClick={closeAcknowledgeModal}>
+                    <div className="modal" onClick={e => e.stopPropagation()}>
+                      <h3>Acknowledge Flag</h3>
+                      <p style={{ fontSize: '13px', color: '#666', marginBottom: '4px' }}>{acknowledgeFlag.item_text}</p>
+                      {acknowledgeFlag.description && (
+                        <p style={{ fontSize: '13px', color: '#555', marginBottom: '12px', fontStyle: 'italic' }}>"{acknowledgeFlag.description}"</p>
+                      )}
+                      <div className="form-group" style={{ marginBottom: '12px' }}>
+                        <label style={{ fontSize: '13px', fontWeight: 600 }}>Your Name</label>
+                        <input
+                          type="text"
+                          value={acknowledgeName}
+                          onChange={(e) => setAcknowledgeName(e.target.value)}
+                          placeholder="Enter your full name"
+                          className="form-input"
+                          style={{ marginTop: '6px' }}
+                        />
                       </div>
-                    ))}
+                      {acknowledgeMessage && (
+                        <p style={{ fontSize: '13px', color: '#ef4444', marginBottom: '8px' }}>{acknowledgeMessage}</p>
+                      )}
+                      <div className="modal-actions">
+                        <button onClick={closeAcknowledgeModal} className="btn-secondary">Cancel</button>
+                        <button
+                          onClick={handleAcknowledgeSign}
+                          disabled={!acknowledgeName.trim()}
+                          className="btn-save"
+                          style={{ width: 'auto', padding: '8px 20px' }}
+                        >
+                          ✍️ Sign & Acknowledge
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </>
@@ -477,9 +602,6 @@ function SupervisorDashboard({ team, onLogout }) {
                       </p>
                       <div className="item-tags">
                         {renderItemResponse(item)}
-                        {item.notes && (
-                          <span className="tag tag-notes">📝 {item.notes}</span>
-                        )}
                         {item.current_flag && (
                           <span className="tag" style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca' }}>
                             🚩 {item.current_flag.description || 'Flagged'}

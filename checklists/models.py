@@ -347,13 +347,18 @@ class FlaggedItem(models.Model):
     photo_uploaded_at = models.DateTimeField(null=True, blank=True)
     flagged_at = models.DateTimeField(default=timezone.now)
     resolved_at = models.DateTimeField(null=True, blank=True)
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
+    acknowledged_by = models.CharField(max_length=100, blank=True)
+    acknowledgement_signature = models.TextField(blank=True)
 
     class Meta:
         ordering = ['-flagged_at']
 
     @property
-    def is_active(self):
-        return self.resolved_at is None
+    def status(self):
+        if self.acknowledged_at:
+            return 'acknowledged'
+        return 'active'
 
     def __str__(self):
         return f"Flag on {self.instance_item.item_text[:30]}"

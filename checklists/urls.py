@@ -17,5 +17,5 @@ urlpatterns = [
     path('flags/', views.flags_view, name='flags'),
     path('flag-item/', views.flag_item, name='flag_item'),
     path('upload-flag-photo/', views.upload_flag_photo, name='upload_flag_photo'),
-    path('clear-flag/', views.clear_flag, name='clear_flag'),
+    path('acknowledge-flag/', views.acknowledge_flag, name='acknowledge_flag'),
 ]

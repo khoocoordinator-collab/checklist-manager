@@ -50,10 +50,12 @@ class ScheduleSerializer(serializers.ModelSerializer):
 
 class FlaggedItemSerializer(serializers.ModelSerializer):
     photo_url = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
 
     class Meta:
         model = FlaggedItem
-        fields = ['id', 'description', 'photo_url', 'photo_uploaded_at', 'flagged_at', 'resolved_at']
+        fields = ['id', 'description', 'photo_url', 'photo_uploaded_at', 'flagged_at', 'resolved_at',
+                  'acknowledged_at', 'acknowledged_by', 'status']
         read_only_fields = ['photo']
 
     def get_photo_url(self, obj):
@@ -62,6 +64,9 @@ class FlaggedItemSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(obj.photo.url) if request else obj.photo.url
         return None
 
+    def get_status(self, obj):
+        return obj.status
+
 
 class InstanceItemSerializer(serializers.ModelSerializer):
     photo_url = serializers.SerializerMethodField()
@@ -69,7 +74,7 @@ class InstanceItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = InstanceItem
-        fields = ['id', 'template_item_id', 'item_text', 'response_type', 'response_value', 'is_checked', 'checked_at', 'notes', 'photo', 'photo_url', 'photo_uploaded_at', 'current_flag']
+        fields = ['id', 'template_item_id', 'item_text', 'response_type', 'response_value', 'is_checked', 'checked_at', 'photo', 'photo_url', 'photo_uploaded_at', 'current_flag']
         read_only_fields = ['photo']  # Photo can only be set via upload endpoint, not sync
 
     def get_photo_url(self, obj):

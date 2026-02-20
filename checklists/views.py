@@ -369,6 +369,9 @@ def flags_view(request):
             'photo_url': photo_url,
             'photo_uploaded_at': flag.photo_uploaded_at,
             'flagged_at': flag.flagged_at,
+            'acknowledged_at': flag.acknowledged_at,
+            'acknowledged_by': flag.acknowledged_by,
+            'status': flag.status,
             'item_text': item.item_text,
             'instance_id': str(instance.id),
             'checklist_title': instance.template.title if instance.template else '',
@@ -472,28 +475,42 @@ def upload_flag_photo(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
-def clear_flag(request):
+def acknowledge_flag(request):
     """
-    POST /api/clear-flag/
-    Body: { item_id }
-    Resolves the active FlaggedItem for an InstanceItem.
+    POST /api/acknowledge-flag/
+    Body: { flag_id, acknowledged_by, acknowledgement_signature }
+    Marks a FlaggedItem as acknowledged by a supervisor.
     """
-    item_id = request.data.get('item_id')
+    flag_id = request.data.get('flag_id')
+    acknowledged_by = request.data.get('acknowledged_by', '')
+    acknowledgement_signature = request.data.get('acknowledgement_signature', '')
 
-    if not item_id:
-        return Response({'error': 'item_id required'}, status=status.HTTP_400_BAD_REQUEST)
+    if not flag_id:
+        return Response({'error': 'flag_id required'}, status=status.HTTP_400_BAD_REQUEST)
+    if not acknowledged_by:
+        return Response({'error': 'acknowledged_by required'}, status=status.HTTP_400_BAD_REQUEST)
+    if not acknowledgement_signature:
+        return Response({'error': 'acknowledgement_signature required'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        item = InstanceItem.objects.get(id=item_id)
-    except InstanceItem.DoesNotExist:
-        return Response({'error': 'Item not found'}, status=status.HTTP_404_NOT_FOUND)
+        flag = FlaggedItem.objects.get(id=flag_id)
+    except FlaggedItem.DoesNotExist:
+        return Response({'error': 'Flag not found'}, status=status.HTTP_404_NOT_FOUND)
 
-    flag = item.flags.filter(resolved_at__isnull=True).first()
-    if flag:
-        flag.resolved_at = timezone.now()
-        flag.save(update_fields=['resolved_at'])
+    if flag.acknowledged_at:
+        return Response({'error': 'Flag already acknowledged'}, status=status.HTTP_400_BAD_REQUEST)
 
-    return Response({'success': True})
+    flag.acknowledged_at = timezone.now()
+    flag.acknowledged_by = acknowledged_by
+    flag.acknowledgement_signature = acknowledgement_signature
+    flag.save(update_fields=['acknowledged_at', 'acknowledged_by', 'acknowledgement_signature'])
+
+    return Response({
+        'success': True,
+        'acknowledged_at': flag.acknowledged_at,
+        'acknowledged_by': flag.acknowledged_by,
+        'status': flag.status,
+    })
 
 
 class SignatureViewSet(viewsets.ModelViewSet):
