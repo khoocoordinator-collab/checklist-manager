@@ -21,7 +21,12 @@ class ChecklistTemplateViewSet(viewsets.ModelViewSet):
         return ChecklistTemplateSerializer
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        from django.contrib.auth.models import User
+        if self.request.user.is_authenticated:
+            serializer.save(created_by=self.request.user)
+        else:
+            admin_user = User.objects.filter(is_superuser=True).first() or User.objects.first()
+            serializer.save(created_by=admin_user)
 
 
 class ScheduleViewSet(viewsets.ModelViewSet):
