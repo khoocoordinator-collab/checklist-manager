@@ -94,8 +94,10 @@ class ChecklistInstanceViewSet(viewsets.ModelViewSet):
                 instance_data['synced_at'] = timezone.now()
 
                 # Try to update existing instance, or create new
+                original_status = None
                 try:
                     existing = ChecklistInstance.objects.get(id=instance_id)
+                    original_status = existing.status
                     serializer = self.get_serializer(existing, data=instance_data, partial=True)
                     action = 'updated'
                 except ChecklistInstance.DoesNotExist:
@@ -145,9 +147,14 @@ class ChecklistInstanceViewSet(viewsets.ModelViewSet):
                         except Exception as e:
                             logger.error(f"Error saving signature: {e}")
 
-                    # Mark instance as completed if all items checked and signed off
+                    # Mark instance as completed/resubmitted if all items checked and signed off
                     if all_checked and items_data and has_signature:
-                        instance.status = 'completed'
+                        if original_status == 'rejected':
+                            instance.status = 'resubmitted'
+                            # Clear supervisor review so supervisor gets a fresh slate
+                            instance.items.all().update(supervisor_confirmed=None, supervisor_comment='')
+                        else:
+                            instance.status = 'completed'
                         instance.save()
 
                     processed_instances.append({'id': str(instance.id), 'action': action, 'status': instance.status})
@@ -202,21 +209,21 @@ def pending_checklists(request):
     except Team.DoesNotExist:
         return Response({'error': 'Team not found'}, status=status.HTTP_404_NOT_FOUND)
 
-    # For supervisor teams, return completed checklists awaiting verification
+    # For supervisor teams, return completed/resubmitted checklists awaiting verification
     # scoped to the same outlet as the supervisor team
     if team.team_type == 'supervisor':
         awaiting = ChecklistInstance.objects.filter(
-            status='completed',
+            status__in=['completed', 'resubmitted'],
             supervisor_signed_off=False,
             team__outlet=team.outlet
         ).select_related('team', 'template')
         serializer = ChecklistInstanceSerializer(awaiting, many=True, context={'request': request})
         return Response(serializer.data)
 
-    # For staff teams, return pending instances for this team
+    # For staff teams, return pending/rejected instances for this team
     pending = ChecklistInstance.objects.filter(
         team_id=team_id,
-        status__in=['draft', 'pending']
+        status__in=['draft', 'pending', 'rejected']
     )
     serializer = ChecklistInstanceSerializer(pending, many=True, context={'request': request})
     return Response(serializer.data)
@@ -328,6 +335,103 @@ def supervisor_verify(request):
     return Response({
         'success': True,
         'message': 'Checklist verified successfully',
+        'instance': ChecklistInstanceSerializer(instance).data
+    })
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def supervisor_review(request):
+    """
+    Supervisor item-by-item review endpoint.
+    Expected payload:
+    {
+        'instance_id': '<uuid>',
+        'supervisor_team_id': '<uuid>',
+        'supervisor_name': 'Supervisor Name',
+        'supervisor_signature': '<base64_image>',
+        'items': [
+            {'item_id': '<uuid>', 'supervisor_confirmed': true/false, 'supervisor_comment': '...'},
+            ...
+        ]
+    }
+    """
+    instance_id = request.data.get('instance_id')
+    supervisor_team_id = request.data.get('supervisor_team_id')
+    supervisor_name = request.data.get('supervisor_name')
+    supervisor_signature = request.data.get('supervisor_signature')
+    items_data = request.data.get('items', [])
+
+    if not all([instance_id, supervisor_team_id, supervisor_name, supervisor_signature]):
+        return Response({
+            'error': 'Missing required fields',
+            'required': ['instance_id', 'supervisor_team_id', 'supervisor_name', 'supervisor_signature', 'items']
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        instance = ChecklistInstance.objects.get(id=instance_id)
+    except (ChecklistInstance.DoesNotExist, Exception):
+        return Response({'error': 'Checklist instance not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if instance.status not in ('completed', 'resubmitted'):
+        return Response({
+            'error': 'Checklist must be completed or resubmitted before supervisor review',
+            'current_status': instance.status
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        supervisor_team = Team.objects.get(id=supervisor_team_id, team_type='supervisor')
+    except (Team.DoesNotExist, Exception):
+        return Response({'error': 'Supervisor team not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if not items_data:
+        return Response({'error': 'No items provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Validate all items have been actioned
+    for item_decision in items_data:
+        if item_decision.get('supervisor_confirmed') is None:
+            return Response(
+                {'error': 'All items must be actioned (confirmed or rejected)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    # Process each item decision
+    any_rejected = False
+    for item_decision in items_data:
+        item_id = item_decision.get('item_id')
+        confirmed = item_decision.get('supervisor_confirmed')
+        comment = item_decision.get('supervisor_comment', '')
+
+        try:
+            item = InstanceItem.objects.get(id=item_id, instance=instance)
+        except InstanceItem.DoesNotExist:
+            return Response({'error': f'Item {item_id} not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        item.supervisor_confirmed = confirmed
+        item.supervisor_comment = comment
+        item.save(update_fields=['supervisor_confirmed', 'supervisor_comment'])
+
+        if not confirmed:
+            any_rejected = True
+
+    # Update instance based on review outcome
+    instance.supervisor_team = supervisor_team
+    instance.supervisor_name = supervisor_name
+    instance.supervisor_signature = supervisor_signature
+    instance.supervisor_signed_at = timezone.now()
+
+    if any_rejected:
+        instance.status = 'rejected'
+        instance.supervisor_signed_off = False
+    else:
+        instance.status = 'verified'
+        instance.supervisor_signed_off = True
+
+    instance.save()
+
+    return Response({
+        'success': True,
+        'status': instance.status,
         'instance': ChecklistInstanceSerializer(instance).data
     })
 

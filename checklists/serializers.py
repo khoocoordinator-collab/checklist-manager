@@ -74,8 +74,8 @@ class InstanceItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = InstanceItem
-        fields = ['id', 'template_item_id', 'item_text', 'response_type', 'response_value', 'is_checked', 'checked_at', 'photo', 'photo_url', 'photo_uploaded_at', 'current_flag']
-        read_only_fields = ['photo']  # Photo can only be set via upload endpoint, not sync
+        fields = ['id', 'template_item_id', 'item_text', 'response_type', 'response_value', 'is_checked', 'checked_at', 'photo', 'photo_url', 'photo_uploaded_at', 'current_flag', 'supervisor_confirmed', 'supervisor_comment']
+        read_only_fields = ['photo', 'supervisor_confirmed', 'supervisor_comment']  # These can only be set via dedicated endpoints
 
     def get_photo_url(self, obj):
         if obj.photo:

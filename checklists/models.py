@@ -181,6 +181,8 @@ class ChecklistInstance(models.Model):
         ('completed', 'Completed'),
         ('verified', 'Double-Verified'),
         ('expired', 'Expired'),
+        ('rejected', 'Rejected'),
+        ('resubmitted', 'Resubmitted'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -191,7 +193,7 @@ class ChecklistInstance(models.Model):
     completed_by = models.CharField(max_length=100, blank=True, help_text="Name of person who completed this checklist")
     created_at = models.DateTimeField(auto_now_add=True)
     synced_at = models.DateTimeField(null=True, blank=True)
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='pending')
 
     # Supervisor verification fields
     supervisor_team = models.ForeignKey(Team, on_delete=models.SET_NULL, null=True, blank=True,
@@ -242,7 +244,7 @@ class ChecklistInstance(models.Model):
 
     def is_expired(self):
         """Check if checklist has passed its deadline."""
-        if self.status in ('completed', 'verified'):
+        if self.status in ('completed', 'verified', 'rejected', 'resubmitted'):
             return False
 
         deadline = self.get_deadline()
@@ -253,7 +255,7 @@ class ChecklistInstance(models.Model):
 
     def check_and_update_expired(self):
         """Update status to expired if past deadline."""
-        if self.is_expired() and self.status not in ('completed', 'verified', 'expired'):
+        if self.is_expired() and self.status not in ('completed', 'verified', 'expired', 'rejected', 'resubmitted'):
             self.status = 'expired'
             self.save(update_fields=['status'])
             return True
@@ -262,7 +264,7 @@ class ChecklistInstance(models.Model):
     def get_supervisor_deadline(self):
         """Calculate the deadline for supervisor verification based on completion time.
         Returns None if supervisor_validity_window_hours is 0 (unlimited)."""
-        if self.status != 'completed' or not self.template:
+        if self.status not in ('completed', 'resubmitted') or not self.template:
             return None
 
         supervisor_hours = self.template.supervisor_validity_window_hours
@@ -290,7 +292,7 @@ class ChecklistInstance(models.Model):
 
     def is_supervisor_expired(self):
         """Check if supervisor verification window has passed."""
-        if self.status != 'completed' or self.supervisor_signed_off:
+        if self.status not in ('completed', 'resubmitted') or self.supervisor_signed_off:
             return False
 
         deadline = self.get_supervisor_deadline()
@@ -332,6 +334,8 @@ class InstanceItem(models.Model):
     notes = models.TextField(blank=True)
     photo = models.ImageField(upload_to=photo_upload_path, null=True, blank=True)
     photo_uploaded_at = models.DateTimeField(null=True, blank=True)
+    supervisor_confirmed = models.BooleanField(null=True, blank=True)
+    supervisor_comment = models.TextField(blank=True)
 
     def __str__(self):
         return f"{self.item_text[:50]} - {'✓' if self.is_checked else '○'}"

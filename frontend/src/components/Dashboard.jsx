@@ -101,11 +101,12 @@ function Dashboard({ team, onOpenChecklist, onPendingCountChange }) {
       setPending(mergedPending)
       onPendingCountChange(mergedPending.length)
 
-      // Fetch completed checklists for today (both completed and verified)
+      // Fetch completed checklists for today (completed, verified, resubmitted)
       const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
-      const [completedResponse, verifiedResponse] = await Promise.all([
+      const [completedResponse, verifiedResponse, resubmittedResponse] = await Promise.all([
         fetch(`${API_BASE}/api/instances/?team=${team.id}&status=completed`),
-        fetch(`${API_BASE}/api/instances/?team=${team.id}&status=verified`)
+        fetch(`${API_BASE}/api/instances/?team=${team.id}&status=verified`),
+        fetch(`${API_BASE}/api/instances/?team=${team.id}&status=resubmitted`)
       ])
 
       let allCompletedToday = []
@@ -116,6 +117,10 @@ function Dashboard({ team, onOpenChecklist, onPendingCountChange }) {
       if (verifiedResponse.ok) {
         const verifiedData = await verifiedResponse.json()
         allCompletedToday = [...allCompletedToday, ...verifiedData.filter(instance => instance.date_label === today)]
+      }
+      if (resubmittedResponse.ok) {
+        const resubmittedData = await resubmittedResponse.json()
+        allCompletedToday = [...allCompletedToday, ...resubmittedData.filter(instance => instance.date_label === today)]
       }
       // Sort by synced_at descending (most recent first)
       allCompletedToday.sort((a, b) => new Date(b.synced_at || b.created_at) - new Date(a.synced_at || a.created_at))
@@ -239,7 +244,9 @@ function Dashboard({ team, onOpenChecklist, onPendingCountChange }) {
                         </div>
                       </div>
                       <div className="checklist-status-col">
-                        <span className="badge badge-pending">{checklist.status}</span>
+                        <span className={`badge ${checklist.status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
+                          {checklist.status === 'rejected' ? 'Rejected' : checklist.status}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -287,8 +294,14 @@ function Dashboard({ team, onOpenChecklist, onPendingCountChange }) {
                         </div>
                       </div>
                       <div className="checklist-status-col">
-                        <span className={`badge ${checklist.status === 'verified' ? 'badge-verified' : 'badge-pending-verification'}`}>
-                          {checklist.status === 'verified' ? '✓ Verified' : '⏳ Pending Verification'}
+                        <span className={`badge ${
+                          checklist.status === 'verified' ? 'badge-verified' :
+                          checklist.status === 'resubmitted' ? 'badge-resubmitted' :
+                          'badge-pending-verification'
+                        }`}>
+                          {checklist.status === 'verified' ? '✓ Verified' :
+                           checklist.status === 'resubmitted' ? '↩ Resubmitted' :
+                           '⏳ Pending Verification'}
                         </span>
                         <span className="view-text">View →</span>
                       </div>

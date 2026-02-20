@@ -75,12 +75,14 @@ function SupervisorDashboard({ team, onLogout }) {
   const [selectedChecklist, setSelectedChecklist] = useState(null)
   const [supervisorName, setSupervisorName] = useState('')
   const [showSignaturePad, setShowSignaturePad] = useState(false)
-  const [signaturePadMode, setSignaturePadMode] = useState('verify') // 'verify' | 'acknowledge'
+  const [signaturePadMode, setSignaturePadMode] = useState('verify') // 'verify' | 'acknowledge' | 'review'
   const [acknowledgeFlag, setAcknowledgeFlag] = useState(null) // flag object being acknowledged
   const [acknowledgeName, setAcknowledgeName] = useState('')
   const [acknowledgeMessage, setAcknowledgeMessage] = useState('')
   const [verifyMessage, setVerifyMessage] = useState('')
   const [enlargedPhoto, setEnlargedPhoto] = useState(null)
+  const [supervisorReview, setSupervisorReview] = useState({}) // item_id → { confirmed: bool|null, comment: string }
+  const [reviewError, setReviewError] = useState('')
 
   useEffect(() => {
     loadData()
@@ -131,6 +133,15 @@ function SupervisorDashboard({ team, onLogout }) {
   const openChecklistDetail = (checklist) => {
     setSelectedChecklist(checklist)
     setVerifyMessage('')
+    setReviewError('')
+    // Initialize item review state
+    if (checklist.status === 'completed' || checklist.status === 'resubmitted') {
+      const initialReview = {}
+      checklist.items?.forEach(item => {
+        initialReview[item.id] = { confirmed: null, comment: '' }
+      })
+      setSupervisorReview(initialReview)
+    }
   }
 
   const closeChecklistDetail = () => {
@@ -138,6 +149,8 @@ function SupervisorDashboard({ team, onLogout }) {
     setSupervisorName('')
     setShowSignaturePad(false)
     setVerifyMessage('')
+    setSupervisorReview({})
+    setReviewError('')
   }
 
   const handleSignatureSave = async (sigData) => {
@@ -174,7 +187,48 @@ function SupervisorDashboard({ team, onLogout }) {
       return
     }
 
-    // verify mode
+    if (signaturePadMode === 'review') {
+      try {
+        const items = selectedChecklist.items.map(item => ({
+          item_id: item.id,
+          supervisor_confirmed: supervisorReview[item.id]?.confirmed,
+          supervisor_comment: supervisorReview[item.id]?.comment || ''
+        }))
+
+        const response = await fetch(`${API_BASE}/api/supervisor/review/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            instance_id: selectedChecklist.id,
+            supervisor_team_id: team.id,
+            supervisor_name: supervisorName,
+            supervisor_signature: sigData.image_data,
+            items
+          })
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          const msg = data.status === 'verified'
+            ? '✅ Checklist verified — all items confirmed!'
+            : '✅ Checklist rejected and returned to staff for correction.'
+          setVerifyMessage(msg)
+          setTimeout(() => {
+            closeChecklistDetail()
+            loadData()
+          }, 2000)
+        } else {
+          const error = await response.json()
+          setVerifyMessage(`❌ Error: ${error.error || 'Review failed'}`)
+        }
+      } catch (err) {
+        console.error('Review error:', err)
+        setVerifyMessage('❌ Network error. Please try again.')
+      }
+      return
+    }
+
+    // verify mode (legacy, kept for backwards compatibility)
     try {
       const response = await fetch(`${API_BASE}/api/supervisor/verify/`, {
         method: 'POST',
@@ -234,6 +288,24 @@ function SupervisorDashboard({ team, onLogout }) {
       return
     }
     setSignaturePadMode('verify')
+    setShowSignaturePad(true)
+  }
+
+  const handleSubmitReview = () => {
+    if (!supervisorName.trim()) {
+      setReviewError('Please enter your name before signing')
+      return
+    }
+    const missingComments = selectedChecklist?.items?.some(item =>
+      supervisorReview[item.id]?.confirmed === false &&
+      !supervisorReview[item.id]?.comment?.trim()
+    )
+    if (missingComments) {
+      setReviewError('Please add a comment for all rejected items')
+      return
+    }
+    setReviewError('')
+    setSignaturePadMode('review')
     setShowSignaturePad(true)
   }
 
@@ -366,7 +438,9 @@ function SupervisorDashboard({ team, onLogout }) {
                             </div>
                           </div>
                           <div className="checklist-status-col">
-                            <span className="status-badge status-pending">Pending</span>
+                            <span className={`status-badge ${checklist.status === 'resubmitted' ? 'status-resubmitted' : 'status-pending'}`}>
+                              {checklist.status === 'resubmitted' ? 'Resubmitted' : 'Pending'}
+                            </span>
                             <CountdownTimer
                               deadline={checklist.supervisor_deadline}
                               isExpired={checklist.is_supervisor_expired}
@@ -558,8 +632,16 @@ function SupervisorDashboard({ team, onLogout }) {
             <button onClick={closeChecklistDetail} className="btn-back">
               ← Back to List
             </button>
-            <span className={`status-badge ${selectedChecklist.status === 'verified' ? 'status-verified' : 'status-pending'}`}>
-              {selectedChecklist.status === 'verified' ? 'Verified' : 'Awaiting Verification'}
+            <span className={`status-badge ${
+              selectedChecklist.status === 'verified' ? 'status-verified' :
+              selectedChecklist.status === 'rejected' ? 'status-rejected' :
+              selectedChecklist.status === 'resubmitted' ? 'status-resubmitted' :
+              'status-pending'
+            }`}>
+              {selectedChecklist.status === 'verified' ? 'Verified' :
+               selectedChecklist.status === 'rejected' ? 'Rejected' :
+               selectedChecklist.status === 'resubmitted' ? 'Resubmitted' :
+               'Awaiting Verification'}
             </span>
           </div>
 
@@ -668,37 +750,109 @@ function SupervisorDashboard({ team, onLogout }) {
             </div>
           )}
 
-          {/* Verification Panel - only show for pending checklists */}
-          {selectedChecklist.status !== 'verified' && (
-            <div className="verification-panel">
-              <h4>👑 Supervisor Verification</h4>
+          {/* Review Panel - item-by-item review for completed/resubmitted checklists */}
+          {(selectedChecklist.status === 'completed' || selectedChecklist.status === 'resubmitted') && (() => {
+            const allActioned = selectedChecklist.items?.every(item =>
+              supervisorReview[item.id]?.confirmed !== null &&
+              supervisorReview[item.id]?.confirmed !== undefined
+            )
+            return (
+              <div className="verification-panel">
+                <h4>👑 Supervisor Review</h4>
+                <p style={{ fontSize: '13px', color: '#666', margin: '0 0 16px' }}>
+                  Review each item and confirm or reject it. Rejected items require a comment.
+                </p>
 
-              <div className="form-group">
-                <label htmlFor="supervisor-name">Your Name</label>
-                <input
-                  id="supervisor-name"
-                  type="text"
-                  value={supervisorName}
-                  onChange={(e) => setSupervisorName(e.target.value)}
-                  placeholder="Enter your full name"
-                  className="form-input"
-                />
+                <div className="review-items">
+                  {selectedChecklist.items?.map((item) => {
+                    const review = supervisorReview[item.id] || { confirmed: null, comment: '' }
+                    const borderColor = review.confirmed === true ? '#22c55e' : review.confirmed === false ? '#ef4444' : '#e5e7eb'
+                    return (
+                      <div key={item.id} style={{ borderLeft: `3px solid ${borderColor}`, paddingLeft: '10px', marginBottom: '14px', transition: 'border-color 0.15s' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: 500 }}>{item.item_text}</p>
+                            <div style={{ fontSize: '12px' }}>{renderItemResponse(item)}</div>
+                            {item.supervisor_comment && selectedChecklist.status === 'resubmitted' && (
+                              <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#b45309', background: '#fffbeb', padding: '3px 6px', borderRadius: '3px', display: 'inline-block' }}>
+                                Previous: {item.supervisor_comment}
+                              </p>
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                            <button
+                              onClick={() => setSupervisorReview(prev => ({ ...prev, [item.id]: { ...prev[item.id], confirmed: true } }))}
+                              style={{
+                                padding: '4px 10px', fontSize: '12px', fontWeight: 600,
+                                background: review.confirmed === true ? '#22c55e' : '#f0fdf4',
+                                color: review.confirmed === true ? 'white' : '#16a34a',
+                                border: '1px solid #bbf7d0', borderRadius: '4px', cursor: 'pointer'
+                              }}
+                            >
+                              ✓ Confirm
+                            </button>
+                            <button
+                              onClick={() => setSupervisorReview(prev => ({ ...prev, [item.id]: { ...prev[item.id], confirmed: false } }))}
+                              style={{
+                                padding: '4px 10px', fontSize: '12px', fontWeight: 600,
+                                background: review.confirmed === false ? '#ef4444' : '#fef2f2',
+                                color: review.confirmed === false ? 'white' : '#ef4444',
+                                border: '1px solid #fecaca', borderRadius: '4px', cursor: 'pointer'
+                              }}
+                            >
+                              ✗ Reject
+                            </button>
+                          </div>
+                        </div>
+                        {review.confirmed === false && (
+                          <textarea
+                            value={review.comment}
+                            onChange={(e) => setSupervisorReview(prev => ({ ...prev, [item.id]: { ...prev[item.id], comment: e.target.value } }))}
+                            placeholder="Comment required for rejection..."
+                            style={{
+                              marginTop: '8px', width: '100%', padding: '6px 8px',
+                              border: '1px solid #fecaca', borderRadius: '4px',
+                              fontSize: '12px', resize: 'vertical', minHeight: '60px',
+                              boxSizing: 'border-box'
+                            }}
+                          />
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="form-group" style={{ marginTop: '16px' }}>
+                  <label htmlFor="supervisor-name">Your Name</label>
+                  <input
+                    id="supervisor-name"
+                    type="text"
+                    value={supervisorName}
+                    onChange={(e) => setSupervisorName(e.target.value)}
+                    placeholder="Enter your full name"
+                    className="form-input"
+                  />
+                </div>
+
+                {reviewError && (
+                  <p style={{ color: '#ef4444', fontSize: '13px', margin: '0 0 10px' }}>{reviewError}</p>
+                )}
+
+                <button
+                  onClick={handleSubmitReview}
+                  disabled={!allActioned || !supervisorName.trim()}
+                  className="btn-verify"
+                >
+                  <span>✍️</span>
+                  Submit Review
+                </button>
+
+                <p className="disclaimer">
+                  By signing, you confirm you have reviewed each item individually and recorded your decision.
+                </p>
               </div>
-
-              <button
-                onClick={handleVerifyClick}
-                disabled={!supervisorName.trim()}
-                className="btn-verify"
-              >
-                <span>✍️</span>
-                Confirm & Sign
-              </button>
-
-              <p className="disclaimer">
-                By signing, you confirm this checklist has been physically inspected and verified.
-              </p>
-            </div>
-          )}
+            )
+          })()}
         </div>
       )}
 

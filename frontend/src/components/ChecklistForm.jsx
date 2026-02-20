@@ -16,7 +16,7 @@ function ChecklistForm({ checklist, team, onBack }) {
   const flagPhotoInputRefs = useRef({})
 
   const isExpired = checklist?.status === 'expired' || checklist?.is_expired
-  const isReadOnly = isExpired || checklist?.status === 'completed' || checklist?.status === 'verified'
+  const isReadOnly = isExpired || checklist?.status === 'completed' || checklist?.status === 'verified' || checklist?.status === 'resubmitted'
 
   // Client-side image compression
   const compressImage = (file, maxWidth = 800, quality = 0.8) => {
@@ -488,6 +488,21 @@ const activeFlagItemData = items.find(i => i.id === activeFlagItem)
         </div>
       )}
 
+      {/* Rejection Banner */}
+      {checklist?.status === 'rejected' && (
+        <div className="deadline-banner expired">
+          <div className="deadline-row">
+            <div className="deadline-main">
+              <span>⚠️</span>
+              <span>Checklist Rejected</span>
+            </div>
+          </div>
+          <p className="deadline-sub">
+            This checklist was rejected. Please review the supervisor comments below and resubmit.
+          </p>
+        </div>
+      )}
+
       {/* Deadline Info (if not expired) */}
       {!isExpired && checklist.deadline && checklist.status !== 'completed' && checklist.status !== 'verified' && (
         <div className="deadline-banner">
@@ -546,6 +561,19 @@ const activeFlagItemData = items.find(i => i.id === activeFlagItem)
               </p>
             </div>
             {renderResponseInput(item, index)}
+            {item.supervisor_confirmed === false && item.supervisor_comment && (
+              <div style={{
+                margin: '6px 0 2px',
+                padding: '6px 10px',
+                background: '#fef2f2',
+                border: '1px solid #fecaca',
+                borderRadius: '4px',
+                fontSize: '12px',
+                color: '#ef4444'
+              }}>
+                ⚠ Supervisor: {item.supervisor_comment}
+              </div>
+            )}
           </div>
         ))}
       </div>
