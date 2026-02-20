@@ -6,7 +6,7 @@ from django.urls import path
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib import messages
 from django.forms import Textarea, ModelForm, ValidationError, ChoiceField
-from .models import Outlet, Team, ChecklistTemplate, TemplateItem, Schedule, ChecklistInstance, InstanceItem, Signature
+from .models import Outlet, Team, ChecklistTemplate, TemplateItem, Schedule, ChecklistInstance, InstanceItem, Signature, FlaggedItem
 
 
 
@@ -392,3 +392,61 @@ class ChecklistInstanceAdmin(admin.ModelAdmin):
                 hours_left
             )
     deadline_display.short_description = 'Deadline'
+
+
+@admin.register(FlaggedItem)
+class FlaggedItemAdmin(admin.ModelAdmin):
+    list_display = ['item_text_short', 'checklist_link', 'team_name', 'description_short', 'photo_thumb', 'flagged_at', 'status_display']
+    list_filter = ['flagged_at', 'resolved_at', 'instance_item__instance__team__outlet']
+    search_fields = ['description', 'instance_item__item_text', 'instance_item__instance__template__title']
+    readonly_fields = ['instance_item', 'flagged_at', 'photo_preview', 'photo_uploaded_at']
+    fields = ['instance_item', 'description', 'photo_preview', 'photo_uploaded_at', 'flagged_at', 'resolved_at']
+    ordering = ['-flagged_at']
+    date_hierarchy = 'flagged_at'
+
+    def item_text_short(self, obj):
+        return obj.instance_item.item_text[:50]
+    item_text_short.short_description = 'Item'
+
+    def checklist_link(self, obj):
+        from django.urls import reverse
+        instance = obj.instance_item.instance
+        url = reverse('admin:checklists_checklistinstance_change', args=[instance.id])
+        title = instance.template.title if instance.template else 'Deleted'
+        return format_html('<a href="{}">{} — {}</a>', url, title, instance.date_label)
+    checklist_link.short_description = 'Checklist'
+
+    def team_name(self, obj):
+        return obj.instance_item.instance.team.name if obj.instance_item.instance.team else '—'
+    team_name.short_description = 'Team'
+
+    def description_short(self, obj):
+        return obj.description[:60] if obj.description else '—'
+    description_short.short_description = 'Description'
+
+    def photo_thumb(self, obj):
+        if obj.photo:
+            return format_html(
+                '<img src="{}" style="max-width: 60px; max-height: 45px; object-fit: cover; border-radius: 3px;" />',
+                obj.photo.url
+            )
+        return '—'
+    photo_thumb.short_description = 'Photo'
+
+    def photo_preview(self, obj):
+        if obj.photo:
+            return format_html(
+                '<img src="{}" style="max-width: 400px; max-height: 300px; object-fit: contain; border: 1px solid #ccc;" />',
+                obj.photo.url
+            )
+        return 'No photo'
+    photo_preview.short_description = 'Photo Preview'
+
+    def status_display(self, obj):
+        if obj.resolved_at:
+            return format_html(
+                '<span style="color: #28a745;">✓ Resolved {}</span>',
+                obj.resolved_at.strftime('%Y-%m-%d %H:%M')
+            )
+        return format_html('<span style="color: #dc3545; font-weight: bold;">⚑ Active</span>')
+    status_display.short_description = 'Status'
