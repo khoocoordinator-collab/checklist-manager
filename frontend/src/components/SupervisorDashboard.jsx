@@ -291,9 +291,19 @@ function SupervisorDashboard({ team, onLogout }) {
     setShowSignaturePad(true)
   }
 
-  const handleSubmitReview = () => {
+  const handleSignOff = () => {
     if (!supervisorName.trim()) {
       setReviewError('Please enter your name before signing')
+      return
+    }
+    setReviewError('')
+    setSignaturePadMode('review')
+    setShowSignaturePad(true)
+  }
+
+  const handleSendForRework = async () => {
+    if (!supervisorName.trim()) {
+      setReviewError('Please enter your name')
       return
     }
     const missingComments = selectedChecklist?.items?.some(item =>
@@ -305,8 +315,39 @@ function SupervisorDashboard({ team, onLogout }) {
       return
     }
     setReviewError('')
-    setSignaturePadMode('review')
-    setShowSignaturePad(true)
+
+    try {
+      const items = selectedChecklist.items.map(item => ({
+        item_id: item.id,
+        supervisor_confirmed: supervisorReview[item.id]?.confirmed,
+        supervisor_comment: supervisorReview[item.id]?.comment || ''
+      }))
+
+      const response = await fetch(`${API_BASE}/api/supervisor/rework/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          instance_id: selectedChecklist.id,
+          supervisor_team_id: team.id,
+          supervisor_name: supervisorName,
+          items
+        })
+      })
+
+      if (response.ok) {
+        setVerifyMessage('✅ Checklist sent back for rework.')
+        setTimeout(() => {
+          closeChecklistDetail()
+          loadData()
+        }, 1500)
+      } else {
+        const error = await response.json()
+        setVerifyMessage(`❌ Error: ${error.error || 'Rework failed'}`)
+      }
+    } catch (err) {
+      console.error('Rework error:', err)
+      setVerifyMessage('❌ Network error. Please try again.')
+    }
   }
 
   const formatDate = (dateString) => {
@@ -667,44 +708,6 @@ function SupervisorDashboard({ team, onLogout }) {
             )}
           </div>
 
-          {/* Checklist Items */}
-          {selectedChecklist.items && selectedChecklist.items.length > 0 && (
-            <div className="items-panel">
-              <h4>Checklist Items</h4>
-              <div className="items-list">
-                {selectedChecklist.items.map((item) => (
-                  <div key={item.id} className={`item-row ${item.response_type === 'photo' ? 'has-photo' : ''}`}>
-                    <span className={`item-status ${item.is_checked ? 'checked' : 'unchecked'}`}>
-                      {item.is_checked ? '✓' : '✗'}
-                    </span>
-                    <div className="item-content">
-                      <p className="item-text">
-                        {item.item_text}
-                        {!!item.current_flag && <span style={{ marginLeft: '6px' }}>🚩</span>}
-                      </p>
-                      <div className="item-tags">
-                        {renderItemResponse(item)}
-                        {item.current_flag && (
-                          <span className="tag" style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca' }}>
-                            🚩 {item.current_flag.description || 'Flagged'}
-                          </span>
-                        )}
-                        {item.current_flag?.photo_url && (
-                          <img
-                            src={item.current_flag.photo_url}
-                            alt="Flag evidence"
-                            style={{ maxWidth: '80px', maxHeight: '60px', objectFit: 'cover', borderRadius: '4px', cursor: 'pointer', marginTop: '4px' }}
-                            onClick={() => openEnlargedPhoto(item.current_flag.photo_url)}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Enlarged Photo Modal */}
           {enlargedPhoto && (
             <div className="modal-overlay" onClick={closeEnlargedPhoto}>
@@ -755,6 +758,12 @@ function SupervisorDashboard({ team, onLogout }) {
             const allActioned = selectedChecklist.items?.every(item =>
               supervisorReview[item.id]?.confirmed !== null &&
               supervisorReview[item.id]?.confirmed !== undefined
+            )
+            const allConfirmed = allActioned && selectedChecklist.items?.every(item =>
+              supervisorReview[item.id]?.confirmed === true
+            )
+            const anyRejected = allActioned && selectedChecklist.items?.some(item =>
+              supervisorReview[item.id]?.confirmed === false
             )
             return (
               <div className="verification-panel">
@@ -838,18 +847,34 @@ function SupervisorDashboard({ team, onLogout }) {
                   <p style={{ color: '#ef4444', fontSize: '13px', margin: '0 0 10px' }}>{reviewError}</p>
                 )}
 
-                <button
-                  onClick={handleSubmitReview}
-                  disabled={!allActioned || !supervisorName.trim()}
-                  className="btn-verify"
-                >
-                  <span>✍️</span>
-                  Submit Review
-                </button>
+                {allConfirmed && (
+                  <button
+                    onClick={handleSignOff}
+                    disabled={!supervisorName.trim()}
+                    className="btn-verify"
+                  >
+                    <span>✍️</span>
+                    Sign Off
+                  </button>
+                )}
 
-                <p className="disclaimer">
-                  By signing, you confirm you have reviewed each item individually and recorded your decision.
-                </p>
+                {anyRejected && (
+                  <button
+                    onClick={handleSendForRework}
+                    disabled={!supervisorName.trim()}
+                    className="btn-verify"
+                    style={{ background: '#ef4444', borderColor: '#dc2626' }}
+                  >
+                    <span>↩</span>
+                    Send for Rework
+                  </button>
+                )}
+
+                {allConfirmed && (
+                  <p className="disclaimer">
+                    By signing, you confirm all items have been inspected and approved.
+                  </p>
+                )}
               </div>
             )
           })()}

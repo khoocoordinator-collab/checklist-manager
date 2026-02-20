@@ -436,6 +436,87 @@ def supervisor_review(request):
     })
 
 
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def supervisor_rework(request):
+    """
+    Send a checklist back for rework (no signature required).
+    Saves item decisions and sets instance status to rejected.
+    Expected payload:
+    {
+        'instance_id': '<uuid>',
+        'supervisor_team_id': '<uuid>',
+        'supervisor_name': 'Supervisor Name',
+        'items': [
+            {'item_id': '<uuid>', 'supervisor_confirmed': true/false, 'supervisor_comment': '...'},
+            ...
+        ]
+    }
+    """
+    instance_id = request.data.get('instance_id')
+    supervisor_team_id = request.data.get('supervisor_team_id')
+    supervisor_name = request.data.get('supervisor_name')
+    items_data = request.data.get('items', [])
+
+    if not all([instance_id, supervisor_team_id, supervisor_name]):
+        return Response({
+            'error': 'Missing required fields',
+            'required': ['instance_id', 'supervisor_team_id', 'supervisor_name', 'items']
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        instance = ChecklistInstance.objects.get(id=instance_id)
+    except (ChecklistInstance.DoesNotExist, Exception):
+        return Response({'error': 'Checklist instance not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if instance.status not in ('completed', 'resubmitted'):
+        return Response({
+            'error': 'Checklist must be completed or resubmitted before review',
+            'current_status': instance.status
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        supervisor_team = Team.objects.get(id=supervisor_team_id, team_type='supervisor')
+    except (Team.DoesNotExist, Exception):
+        return Response({'error': 'Supervisor team not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if not items_data:
+        return Response({'error': 'No items provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Validate all items have been actioned
+    for item_decision in items_data:
+        if item_decision.get('supervisor_confirmed') is None:
+            return Response(
+                {'error': 'All items must be actioned before sending for rework'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    # Save item decisions
+    for item_decision in items_data:
+        item_id = item_decision.get('item_id')
+        confirmed = item_decision.get('supervisor_confirmed')
+        comment = item_decision.get('supervisor_comment', '')
+
+        try:
+            item = InstanceItem.objects.get(id=item_id, instance=instance)
+        except (InstanceItem.DoesNotExist, Exception):
+            return Response({'error': f'Item {item_id} not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        item.supervisor_confirmed = confirmed
+        item.supervisor_comment = comment
+        item.save(update_fields=['supervisor_confirmed', 'supervisor_comment'])
+
+    # Reject and return to staff queue
+    instance.supervisor_team = supervisor_team
+    instance.supervisor_name = supervisor_name
+    instance.supervisor_signed_at = timezone.now()
+    instance.status = 'rejected'
+    instance.supervisor_signed_off = False
+    instance.save()
+
+    return Response({'success': True, 'status': 'rejected'})
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def flags_view(request):
