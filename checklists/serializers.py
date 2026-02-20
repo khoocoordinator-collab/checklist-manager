@@ -99,6 +99,7 @@ class ChecklistInstanceSerializer(serializers.ModelSerializer):
     template_supervisor_validity_hours = serializers.IntegerField(source='template.supervisor_validity_window_hours', read_only=True)
     signature_data = serializers.SerializerMethodField()
     supervisor_signature_data = serializers.SerializerMethodField()
+    team_name = serializers.CharField(source='team.name', read_only=True)
     supervisor_team_name = serializers.CharField(source='supervisor_team.name', read_only=True)
     deadline = serializers.SerializerMethodField()
     is_expired = serializers.SerializerMethodField()
@@ -108,7 +109,7 @@ class ChecklistInstanceSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChecklistInstance
         fields = [
-            'id', 'template', 'template_title', 'team', 'date_label', 'status',
+            'id', 'template', 'template_title', 'team', 'team_name', 'date_label', 'status',
             'created_at', 'synced_at', 'items', 'created_by', 'completed_by',
             'signature_data', 'supervisor_team', 'supervisor_team_name',
             'supervisor_signed_off', 'supervisor_signature', 'supervisor_name',

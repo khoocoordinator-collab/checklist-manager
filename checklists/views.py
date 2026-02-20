@@ -337,7 +337,9 @@ def supervisor_verify(request):
 def flags_view(request):
     """
     GET /api/flags/?team=<supervisor_team_id>
-    Returns all active (unresolved) flags for the outlet of the supervisor team.
+    Returns:
+    - All active (unacknowledged) flags regardless of date
+    - Acknowledged flags from today only
     """
     team_id = request.query_params.get('team')
     if not team_id:
@@ -348,9 +350,15 @@ def flags_view(request):
     except (Team.DoesNotExist, Exception):
         return Response({'error': 'Team not found'}, status=status.HTTP_404_NOT_FOUND)
 
+    today = timezone.now().date()
+
+    from django.db.models import Q
     flags = FlaggedItem.objects.filter(
         resolved_at__isnull=True,
         instance_item__instance__team__outlet=team.outlet
+    ).filter(
+        Q(acknowledged_at__isnull=True) |
+        Q(acknowledged_at__date=today)
     ).select_related(
         'instance_item__instance__team',
         'instance_item__instance__template'
