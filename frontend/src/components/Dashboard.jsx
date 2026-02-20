@@ -236,17 +236,16 @@ function Dashboard({ team, onOpenChecklist, onPendingCountChange }) {
                         <h3 className="checklist-title">{checklist.template_title}</h3>
                         <div className="checklist-meta">
                           <span>{checklist.date_label}</span>
-                          <span className="checklist-meta-separator">•</span>
-                          <CountdownTimer
-                            deadline={checklist.deadline}
-                            isExpired={checklist.is_expired}
-                          />
                         </div>
                       </div>
                       <div className="checklist-status-col">
                         <span className={`badge ${checklist.status === 'rejected' ? 'badge-rejected' : 'badge-pending'}`}>
                           {checklist.status === 'rejected' ? 'Rejected' : checklist.status}
                         </span>
+                        <CountdownTimer
+                          deadline={checklist.deadline}
+                          isExpired={checklist.is_expired}
+                        />
                       </div>
                     </div>
                   </div>

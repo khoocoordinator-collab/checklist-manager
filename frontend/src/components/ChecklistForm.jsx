@@ -16,7 +16,29 @@ function ChecklistForm({ checklist, team, onBack }) {
   const flagPhotoInputRefs = useRef({})
 
   const isExpired = checklist?.status === 'expired' || checklist?.is_expired
-  const isReadOnly = isExpired || checklist?.status === 'completed' || checklist?.status === 'verified' || checklist?.status === 'resubmitted'
+
+  // Live countdown state
+  const calcDeadline = () => {
+    if (!checklist?.deadline || isExpired) return { text: null, urgency: 'normal' }
+    const diff = new Date(checklist.deadline) - new Date()
+    if (diff <= 0) return { text: 'Expired', urgency: 'expired' }
+    const hours = Math.floor(diff / 3600000)
+    const minutes = Math.floor((diff % 3600000) / 60000)
+    const seconds = Math.floor((diff % 60000) / 1000)
+    if (diff <= 15 * 60 * 1000) return { text: `${minutes}m ${seconds}s left`, urgency: 'critical' }
+    if (diff <= 60 * 60 * 1000) return { text: `${minutes}m left`, urgency: 'warning' }
+    return { text: hours > 0 ? `${hours}h ${minutes}m left` : `${minutes}m left`, urgency: 'normal' }
+  }
+  const [liveDeadline, setLiveDeadline] = useState(calcDeadline)
+
+  useEffect(() => {
+    if (!checklist?.deadline || isExpired) return
+    const timer = setInterval(() => setLiveDeadline(calcDeadline()), 1000)
+    return () => clearInterval(timer)
+  }, [checklist?.deadline, isExpired])
+
+  const isActuallyExpired = isExpired || liveDeadline.urgency === 'expired'
+  const isReadOnly = isActuallyExpired || checklist?.status === 'completed' || checklist?.status === 'verified' || checklist?.status === 'resubmitted'
 
   // Client-side image compression
   const compressImage = (file, maxWidth = 800, quality = 0.8) => {
@@ -473,7 +495,7 @@ const activeFlagItemData = items.find(i => i.id === activeFlagItem)
       </div>
 
       {/* Expired Banner */}
-      {isExpired && (
+      {isActuallyExpired && (
         <div className="deadline-banner expired">
           <div className="deadline-row">
             <div className="deadline-main">
@@ -504,14 +526,14 @@ const activeFlagItemData = items.find(i => i.id === activeFlagItem)
       )}
 
       {/* Deadline Info (if not expired) */}
-      {!isExpired && checklist.deadline && checklist.status !== 'completed' && checklist.status !== 'verified' && (
-        <div className="deadline-banner">
+      {!isActuallyExpired && checklist.deadline && checklist.status !== 'completed' && checklist.status !== 'verified' && (
+        <div className={`deadline-banner ${liveDeadline.urgency !== 'normal' ? liveDeadline.urgency : ''}`}>
           <div className="deadline-row">
             <div className="deadline-main">
               <span>⏰</span>
               <span>Deadline: {formatDeadline(checklist.deadline)}</span>
             </div>
-            <span className="deadline-time">{getTimeLeft(checklist.deadline)}</span>
+            <span className={`deadline-time deadline-time-${liveDeadline.urgency}`}>{liveDeadline.text}</span>
           </div>
           <p className="deadline-sub">Validity: {checklist.template_validity_hours || 3} hours from scheduled time</p>
         </div>

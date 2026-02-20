@@ -488,7 +488,13 @@
 
 .countdown-critical {
   color: var(--danger);
-  font-weight: 600;
+  font-weight: 700;
+  animation: countdown-pulse 1s ease-in-out infinite;
+}
+
+@keyframes countdown-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
 }
 
 .countdown-expired {
@@ -608,6 +614,30 @@
 .deadline-banner.expired {
   background: var(--danger-bg);
   border-color: #fca5a5;
+}
+
+.deadline-banner.warning {
+  background: #fff7ed;
+  border-color: #fb923c;
+}
+
+.deadline-banner.critical {
+  background: var(--danger-bg);
+  border-color: #fca5a5;
+}
+
+.deadline-time-warning {
+  color: #c2410c;
+}
+
+.deadline-time-critical {
+  color: var(--danger);
+  animation: deadline-pulse 1s ease-in-out infinite;
+}
+
+@keyframes deadline-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 .deadline-row {

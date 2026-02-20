@@ -209,11 +209,11 @@ class ChecklistInstance(models.Model):
 
     def get_deadline(self):
         """Calculate the deadline based on schedule time + validity window.
+        Falls back to created_at when no schedule is set.
         Returns None if validity_window_hours is 0 (unlimited)."""
-        if not self.template or not self.template.schedule:
+        if not self.template:
             return None
 
-        schedule = self.template.schedule
         validity_hours = self.template.validity_window_hours
 
         # 0 means unlimited - no deadline
@@ -224,23 +224,23 @@ class ChecklistInstance(models.Model):
         if validity_hours is None:
             validity_hours = 3
 
-        # Parse date_label to get the base date
-        try:
-            base_date = datetime.strptime(self.date_label, '%Y-%m-%d').date()
-        except ValueError:
-            return None
+        if self.template.schedule:
+            # Scheduled checklist — deadline = scheduled time + validity window
+            schedule = self.template.schedule
+            try:
+                base_date = datetime.strptime(self.date_label, '%Y-%m-%d').date()
+            except ValueError:
+                return None
+            scheduled_time = schedule.time_of_day or time(8, 0)
+            scheduled_datetime = datetime.combine(base_date, scheduled_time)
+            scheduled_datetime = timezone.make_aware(scheduled_datetime, timezone.get_current_timezone())
+        else:
+            # Manually created — deadline = created_at + validity window
+            if not self.created_at:
+                return None
+            scheduled_datetime = self.created_at
 
-        # Get scheduled time
-        scheduled_time = schedule.time_of_day or time(8, 0)
-
-        # Calculate scheduled datetime (make it timezone-aware)
-        scheduled_datetime = datetime.combine(base_date, scheduled_time)
-        scheduled_datetime = timezone.make_aware(scheduled_datetime, timezone.get_current_timezone())
-
-        # Add validity window
-        deadline = scheduled_datetime + timedelta(hours=validity_hours)
-
-        return deadline
+        return scheduled_datetime + timedelta(hours=validity_hours)
 
     def is_expired(self):
         """Check if checklist has passed its deadline."""
