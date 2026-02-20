@@ -149,6 +149,8 @@ CORS_ALLOWED_ORIGINS = [
     'http://127.0.0.1:5173',
     'http://159.223.57.142:5173',
     'https://checklist-manager.onrender.com',
+    'http://64.23.197.153',
+    'http://64.23.197.153:80',
 ]
 
 # Add any additional CORS origins from environment
