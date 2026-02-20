@@ -31,10 +31,10 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-z2i65nbo*^b$8af)2%2w3
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', '').lower() in ('true', '1', 'yes')
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,checklist-dev.duckdns.org,159.223.57.142').split(',')
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,checklist-dev.duckdns.org,159.223.57.142,checklist.eatcompany.co,64.23.197.153').split(',')
 
 # CSRF trusted origins for HTTPS
-CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', 'http://checklist-dev.duckdns.org').split(',')
+CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', 'http://checklist-dev.duckdns.org,https://checklist.eatcompany.co').split(',')
 
 
 # Application definition
@@ -119,7 +119,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Singapore'
 
 USE_I18N = True
 
@@ -144,6 +144,7 @@ STORAGES = {
 
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
+    'https://checklist.eatcompany.co',
     'http://checklist-dev.duckdns.org',
     'http://localhost:5173',
     'http://127.0.0.1:5173',

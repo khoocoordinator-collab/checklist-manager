@@ -203,10 +203,12 @@ def pending_checklists(request):
         return Response({'error': 'Team not found'}, status=status.HTTP_404_NOT_FOUND)
 
     # For supervisor teams, return completed checklists awaiting verification
+    # scoped to the same outlet as the supervisor team
     if team.team_type == 'supervisor':
         awaiting = ChecklistInstance.objects.filter(
             status='completed',
-            supervisor_signed_off=False
+            supervisor_signed_off=False,
+            team__outlet=team.outlet
         ).select_related('team', 'template')
         serializer = ChecklistInstanceSerializer(awaiting, many=True, context={'request': request})
         return Response(serializer.data)

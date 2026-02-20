@@ -10,9 +10,6 @@ from .models import Outlet, Team, ChecklistTemplate, TemplateItem, Schedule, Che
 
 
 
-        # Note: 'name' is excluded - it gets auto-generated in model.save()
-
-
 class ChecklistTemplateForm(ModelForm):
     """Custom form with dropdown for validity window hours."""
 
@@ -35,7 +32,7 @@ class ChecklistTemplateForm(ModelForm):
 
     class Meta:
         model = ChecklistTemplate
-        fields = '__all__'
+        exclude = ['created_by']
 
 
 @admin.register(Outlet)
@@ -87,7 +84,7 @@ class ChecklistTemplateAdmin(admin.ModelAdmin):
                 '<span style="color: #dc3545;" title="Add items first">\u26a0\ufe0f No items</span>'
             )
         return format_html(
-            '<a class="button" href="{}" style="background: #28a745; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none;">\ud83d\udccb Generate Instance</a>',
+            '<a class="button" href="{}" style="background: #28a745; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none;">\U0001F4CB Generate Instance</a>',
             url
         )
     generate_button.short_description = 'Action'
@@ -251,7 +248,10 @@ class ChecklistTemplateAdmin(admin.ModelAdmin):
 
 @admin.register(Schedule)
 class ScheduleAdmin(admin.ModelAdmin):
-    
+
+    class Media:
+        js = ('admin/checklists/js/schedule_fields.js',)
+
     list_display = ['name', 'frequency_display', 'schedule_details', 'time_of_day', 'is_active']
     list_filter = ['frequency', 'is_active']
     fieldsets = (
