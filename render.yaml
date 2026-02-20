@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: checklist-manager
+    runtime: python
+    region: singapore
+    plan: starter
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn backend.wsgi:application"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: checklist-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: "localhost,127.0.0.1,checklist-manager.onrender.com"
+      - key: CSRF_TRUSTED_ORIGINS
+        value: "https://checklist-manager.onrender.com"
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_STORAGE_BUCKET_NAME
+        value: "checklist-manager-archives-sg"
+      - key: AWS_S3_REGION_NAME
+        value: "ap-southeast-1"
+
+databases:
+  - name: checklist-db
+    region: singapore
+    plan: starter
