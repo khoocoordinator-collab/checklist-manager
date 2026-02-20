@@ -100,6 +100,11 @@ class ChecklistTemplateAdmin(admin.ModelAdmin):
         return custom_urls + urls
 
     @admin.action(description='Duplicate selected templates')
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+
     def duplicate_selected_templates(self, request, queryset):
         duplicated = []
         for original in queryset:
