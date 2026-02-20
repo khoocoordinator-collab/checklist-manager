@@ -261,7 +261,7 @@ class ScheduleAdmin(admin.ModelAdmin):
     list_filter = ['frequency', 'is_active']
     fieldsets = (
         (None, {
-            'fields': ('name', 'frequency', 'is_active')
+            'fields': ('frequency', 'is_active')
         }),
         ('Schedule Details', {
             'fields': ('time_of_day', 'day_of_week', 'day_of_month'),
