@@ -9,6 +9,20 @@ from django.forms import Textarea, ModelForm, ValidationError, ChoiceField
 from .models import Outlet, Team, ChecklistTemplate, TemplateItem, Schedule, ChecklistInstance, InstanceItem, Signature
 
 
+class ScheduleForm(ModelForm):
+    """Custom form to make name optional since save() auto-generates it."""
+    
+    class Meta:
+        model = Schedule
+        fields = '__all__'
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Make name field optional - save() will auto-generate it
+        self.fields['name'].required = False
+        self.fields['name'].help_text = 'Auto-generated from frequency + day + time. Optional - leave blank to auto-generate.'
+
+
 class ChecklistTemplateForm(ModelForm):
     """Custom form with dropdown for validity window hours."""
 
@@ -19,14 +33,14 @@ class ChecklistTemplateForm(ModelForm):
         choices=HOURS_CHOICES,
         initial=3,
         help_text="Hours after scheduled time for staff to complete checklist. '0' means unlimited time.",
-        label="Staff Validity Window"
+        label='Staff Validity Window'
     )
 
     supervisor_validity_window_hours = ChoiceField(
         choices=HOURS_CHOICES,
         initial=2,
         help_text="Hours after staff completion for supervisor to verify. '0' means unlimited time.",
-        label="Supervisor Validity Window"
+        label='Supervisor Validity Window'
     )
 
     class Meta:
@@ -80,10 +94,10 @@ class ChecklistTemplateAdmin(admin.ModelAdmin):
         item_count = obj.items.count()
         if item_count == 0:
             return format_html(
-                '<span style="color: #dc3545;" title="Add items first">⚠️ No items</span>'
+                '<span style="color: #dc3545;" title="Add items first">\u26a0\ufe0f No items</span>'
             )
         return format_html(
-            '<a class="button" href="{}" style="background: #28a745; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none;">📋 Generate Instance</a>',
+            '<a class="button" href="{}" style="background: #28a745; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none;">\ud83d\udccb Generate Instance</a>',
             url
         )
     generate_button.short_description = 'Action'
@@ -247,6 +261,7 @@ class ChecklistTemplateAdmin(admin.ModelAdmin):
 
 @admin.register(Schedule)
 class ScheduleAdmin(admin.ModelAdmin):
+    form = ScheduleForm
     list_display = ['name', 'frequency_display', 'schedule_details', 'time_of_day', 'is_active']
     list_filter = ['frequency', 'is_active']
     fieldsets = (
@@ -265,7 +280,7 @@ class ScheduleAdmin(admin.ModelAdmin):
 
     def schedule_details(self, obj):
         if obj.frequency == 'daily':
-            return '—'
+            return '\u2014'
         elif obj.frequency in ('weekly', 'bi_weekly'):
             return obj.get_day_of_week_display() or 'Not set'
         elif obj.frequency == 'monthly':
@@ -273,7 +288,7 @@ class ScheduleAdmin(admin.ModelAdmin):
                 suffix = obj._get_ordinal_suffix(obj.day_of_month)
                 return f"{obj.day_of_month}{suffix} of month"
             return 'Not set'
-        return '—'
+        return '\u2014'
     schedule_details.short_description = 'Details'
 
 
@@ -364,13 +379,13 @@ class ChecklistInstanceAdmin(admin.ModelAdmin):
     def deadline_display(self, obj):
         deadline = obj.get_deadline()
         if not deadline:
-            return '—'
+            return '\u2014'
         from django.utils import timezone
         if obj.status in ('completed', 'verified'):
-            return f"✓ {deadline.strftime('%Y-%m-%d %H:%M')}"
+            return f"\u2713 {deadline.strftime('%Y-%m-%d %H:%M')}"
         elif obj.is_expired():
             return format_html(
-                '<span style="color: #dc3545; font-weight: bold;">⚠ Expired (deadline: {})</span>',
+                '<span style="color: #dc3545; font-weight: bold;">\u26a0 Expired (deadline: {})</span>',
                 deadline.strftime('%Y-%m-%d %H:%M')
             )
         else:
@@ -379,11 +394,11 @@ class ChecklistInstanceAdmin(admin.ModelAdmin):
             if hours_left < 1:
                 minutes_left = int(time_left.total_seconds() / 60)
                 return format_html(
-                    '<span style="color: #ffc107;">⏰ {}m left</span>',
+                    '<span style="color: #ffc107;">\u23f0 {}m left</span>',
                     minutes_left
                 )
             return format_html(
-                '<span style="color: #28a745;">⏰ {}h left</span>',
+                '<span style="color: #28a745;">\u23f0 {}h left</span>',
                 hours_left
             )
     deadline_display.short_description = 'Deadline'
