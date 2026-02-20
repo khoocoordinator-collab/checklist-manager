@@ -18,26 +18,32 @@ from django.contrib import admin
 from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
-from django.views.generic import TemplateView
-from django.http import HttpResponse
+from django.http import HttpResponse, FileResponse
+from django.views.static import serve
+import os
 
 def health_check(request):
     return HttpResponse("OK", content_type="text/plain")
+
+def serve_frontend(request, path=''):
+    """Serve the frontend index.html for all non-API routes"""
+    index_path = os.path.join(settings.BASE_DIR, 'frontend', 'dist', 'index.html')
+    if os.path.exists(index_path):
+        return FileResponse(open(index_path, 'rb'))
+    return HttpResponse("Frontend not built", status=404)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('checklists.urls')),
     path('health/', health_check, name='health'),
     # Serve frontend at root
-    path('', TemplateView.as_view(template_name='index.html'), name='frontend'),
+    path('', serve_frontend, name='frontend'),
 ]
 
-# Serve media files in development
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+# Serve media files
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 # Catch-all for frontend SPA routing (must be last)
 urlpatterns += [
-    re_path(r'^(?!admin/|api/|health/|static/|media/).*$', TemplateView.as_view(template_name='index.html')),
+    re_path(r'^(?!admin/|api/|health/|static/|media/).*$', serve_frontend),
 ]
