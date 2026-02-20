@@ -16,5 +16,5 @@
 ## Stack
 - Ubuntu 22.04, PostgreSQL 16, Nginx, Gunicorn
 - Django + Django Admin + DRF
-- Branch: render-deployment
+- Branch: VPS-Deployment
 - URL: http://64.23.197.153/

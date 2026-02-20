@@ -25,7 +25,7 @@ case "$1" in
         fi
         git add -A
         git commit -m "$2"
-        git push origin render-deployment
+        git push origin VPS-Deployment
         echo "✅ Committed and pushed"
         ;;
     
