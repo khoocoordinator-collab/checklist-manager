@@ -18,8 +18,7 @@ from django.contrib import admin
 from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
-from django.http import HttpResponse, FileResponse
-from django.views.static import serve
+from django.http import HttpResponse
 import os
 
 def health_check(request):
@@ -28,9 +27,12 @@ def health_check(request):
 def serve_frontend(request, path=''):
     """Serve the frontend index.html for all non-API routes"""
     index_path = os.path.join(settings.BASE_DIR, 'frontend', 'dist', 'index.html')
-    if os.path.exists(index_path):
-        return FileResponse(open(index_path, 'rb'))
-    return HttpResponse("Frontend not built", status=404)
+    try:
+        with open(index_path, 'r') as f:
+            content = f.read()
+        return HttpResponse(content, content_type='text/html')
+    except FileNotFoundError:
+        return HttpResponse("Frontend not built. Run 'npm run build' in frontend/", status=404)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -40,7 +42,8 @@ urlpatterns = [
     path('', serve_frontend, name='frontend'),
 ]
 
-# Serve media files
+# Serve static and media files
+urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 # Catch-all for frontend SPA routing (must be last)
