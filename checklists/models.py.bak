@@ -63,40 +63,6 @@ class Schedule(models.Model):
     class Meta:
         verbose_name_plural = 'schedules'
 
-
-    def save(self, *args, **kwargs):
-        self.name = self.generate_name()
-        super().save(*args, **kwargs)
-
-    def generate_name(self):
-        time_str = self.time_of_day.strftime("%H:%M") if self.time_of_day else "08:00"
-        if self.frequency == "daily":
-            return f"Daily at {time_str}"
-        elif self.frequency == "weekly":
-            day_name = self.get_day_of_week_display() or "Unknown"
-            return f"Weekly on {day_name} at {time_str}"
-        elif self.frequency == "bi_weekly":
-            day_name = self.get_day_of_week_display() or "Unknown"
-            return f"Bi-Weekly on {day_name} at {time_str}"
-        elif self.frequency == "monthly":
-            day = self.day_of_month or 1
-            return f"Monthly on {day}{self._get_ordinal(day)} at {time_str}"
-        return "Unknown Schedule"
-
-    def _get_ordinal(self, n):
-        if 11 <= n <= 13:
-            return "th"
-        last = n % 10
-        if last == 1:
-            return "st"
-        elif last == 2:
-            return "nd"
-        elif last == 3:
-            return "rd"
-        return "th"
-
-    def __str__(self):
-        return self.name
     def clean(self):
         from django.core.exceptions import ValidationError
         
