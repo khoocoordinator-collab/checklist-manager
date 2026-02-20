@@ -1,5 +1,8 @@
 import uuid
+from datetime import datetime, time, timedelta
 from django.db import models
+from django.utils import timezone
+from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
 
 
@@ -50,7 +53,7 @@ class Schedule(models.Model):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100, editable=False, help_text="Auto-generated from frequency and time settings")
     frequency = models.CharField(max_length=10, choices=FREQUENCY_CHOICES)
     time_of_day = models.TimeField(default='08:00', help_text="Default is 8:00 AM if not specified")
     day_of_week = models.IntegerField(choices=DAY_OF_WEEK_CHOICES, null=True, blank=True,
@@ -62,7 +65,6 @@ class Schedule(models.Model):
 
     class Meta:
         verbose_name_plural = 'schedules'
-
 
     def save(self, *args, **kwargs):
         self.name = self.generate_name()
@@ -95,14 +97,10 @@ class Schedule(models.Model):
             return "rd"
         return "th"
 
-    def __str__(self):
-        return self.name
     def clean(self):
-        from django.core.exceptions import ValidationError
-        
         if self.frequency in ('weekly', 'bi_weekly') and self.day_of_week is None:
             raise ValidationError('Day of week is required for Weekly and Bi-Weekly schedules')
-        
+
         if self.frequency == 'monthly':
             if self.day_of_month is None:
                 raise ValidationError('Day of month is required for Monthly schedules')
@@ -111,7 +109,7 @@ class Schedule(models.Model):
 
     def __str__(self):
         parts = [self.name, '(']
-        
+
         if self.frequency == 'daily':
             parts.append(f"Daily at {self.time_of_day.strftime('%H:%M')}")
         elif self.frequency == 'weekly':
@@ -121,22 +119,10 @@ class Schedule(models.Model):
             day_name = dict(self.DAY_OF_WEEK_CHOICES).get(self.day_of_week, 'Unknown')
             parts.append(f"Bi-Weekly on {day_name} at {self.time_of_day.strftime('%H:%M')}")
         elif self.frequency == 'monthly':
-            parts.append(f"Monthly on {self.day_of_month}{self._get_ordinal_suffix(self.day_of_month)} at {self.time_of_day.strftime('%H:%M')}")
-        
+            parts.append(f"Monthly on {self.day_of_month}{self._get_ordinal(self.day_of_month)} at {self.time_of_day.strftime('%H:%M')}")
+
         parts.append(')')
         return ''.join(parts)
-    
-    def _get_ordinal_suffix(self, n):
-        if 11 <= n <= 13:
-            return 'th'
-        last_digit = n % 10
-        if last_digit == 1:
-            return 'st'
-        elif last_digit == 2:
-            return 'nd'
-        elif last_digit == 3:
-            return 'rd'
-        return 'th'
 
 
 class ChecklistTemplate(models.Model):
@@ -225,9 +211,6 @@ class ChecklistInstance(models.Model):
         if not self.template or not self.template.schedule:
             return None
 
-        from datetime import datetime, time, timedelta
-        from django.utils import timezone
-
         schedule = self.template.schedule
         validity_hours = self.template.validity_window_hours
 
@@ -261,12 +244,11 @@ class ChecklistInstance(models.Model):
         """Check if checklist has passed its deadline."""
         if self.status in ('completed', 'verified'):
             return False
-        
+
         deadline = self.get_deadline()
         if not deadline:
             return False
-        
-        from django.utils import timezone
+
         return timezone.now() > deadline
 
     def check_and_update_expired(self):
@@ -282,9 +264,6 @@ class ChecklistInstance(models.Model):
         Returns None if supervisor_validity_window_hours is 0 (unlimited)."""
         if self.status != 'completed' or not self.template:
             return None
-
-        from datetime import timedelta
-        from django.utils import timezone
 
         supervisor_hours = self.template.supervisor_validity_window_hours
 
@@ -318,7 +297,6 @@ class ChecklistInstance(models.Model):
         if not deadline:
             return False
 
-        from django.utils import timezone
         return timezone.now() > deadline
 
     def __str__(self):
@@ -328,10 +306,8 @@ class ChecklistInstance(models.Model):
 
 def photo_upload_path(instance, filename):
     """Generate unique path for photo uploads: photos/YYYY/MM/DD/uuid.jpg"""
-    import uuid
     ext = filename.split('.')[-1].lower()
     new_filename = f"{uuid.uuid4()}.{ext}"
-    from datetime import datetime
     now = datetime.now()
     return f"photos/{now.year}/{now.month:02d}/{now.day:02d}/{new_filename}"
 

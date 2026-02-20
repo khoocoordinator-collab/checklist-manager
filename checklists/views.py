@@ -3,6 +3,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.utils import timezone
+from django.db import transaction
 from .models import Team, ChecklistTemplate, TemplateItem, Schedule, ChecklistInstance, InstanceItem, Signature
 from .serializers import (
     TeamSerializer, ChecklistTemplateSerializer, ChecklistTemplateCreateSerializer,
@@ -59,6 +60,7 @@ class ChecklistInstanceViewSet(viewsets.ModelViewSet):
         return queryset
 
     @action(detail=False, methods=['post'])
+    @transaction.atomic
     def sync(self, request):
         import logging
         logger = logging.getLogger(__name__)

@@ -9,12 +9,7 @@ from django.forms import Textarea, ModelForm, ValidationError, ChoiceField
 from .models import Outlet, Team, ChecklistTemplate, TemplateItem, Schedule, ChecklistInstance, InstanceItem, Signature
 
 
-class ScheduleForm(ModelForm):
-    """Custom form - name is auto-generated, so exclude it from the form."""
-    
-    class Meta:
-        model = Schedule
-        fields = ['frequency', 'time_of_day', 'day_of_week', 'day_of_month', 'is_active']
+
         # Note: 'name' is excluded - it gets auto-generated in model.save()
 
 
@@ -256,7 +251,7 @@ class ChecklistTemplateAdmin(admin.ModelAdmin):
 
 @admin.register(Schedule)
 class ScheduleAdmin(admin.ModelAdmin):
-    form = ScheduleForm
+    
     list_display = ['name', 'frequency_display', 'schedule_details', 'time_of_day', 'is_active']
     list_filter = ['frequency', 'is_active']
     fieldsets = (
@@ -280,7 +275,7 @@ class ScheduleAdmin(admin.ModelAdmin):
             return obj.get_day_of_week_display() or 'Not set'
         elif obj.frequency == 'monthly':
             if obj.day_of_month:
-                suffix = obj._get_ordinal_suffix(obj.day_of_month)
+                suffix = obj._get_ordinal(obj.day_of_month)
                 return f"{obj.day_of_month}{suffix} of month"
             return 'Not set'
         return '\u2014'
