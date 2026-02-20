@@ -60,13 +60,13 @@ function App() {
         <SupervisorDashboard team={team} onLogout={handleLogout} />
       ) : (
         <>
-          {view === 'dashboard' && (
+          <div style={{ display: view === 'dashboard' ? 'block' : 'none' }}>
             <Dashboard
               team={team}
               onOpenChecklist={openChecklist}
               onPendingCountChange={setPendingCount}
             />
-          )}
+          </div>
 
           {view === 'checklist' && (
             <ChecklistForm
