@@ -10,17 +10,12 @@ from .models import Outlet, Team, ChecklistTemplate, TemplateItem, Schedule, Che
 
 
 class ScheduleForm(ModelForm):
-    """Custom form to make name optional since save() auto-generates it."""
+    """Custom form - name is auto-generated, so exclude it from the form."""
     
     class Meta:
         model = Schedule
-        fields = '__all__'
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Make name field optional - save() will auto-generate it
-        self.fields['name'].required = False
-        self.fields['name'].help_text = 'Auto-generated from frequency + day + time. Optional - leave blank to auto-generate.'
+        fields = ['frequency', 'time_of_day', 'day_of_week', 'day_of_month', 'is_active']
+        # Note: 'name' is excluded - it gets auto-generated in model.save()
 
 
 class ChecklistTemplateForm(ModelForm):
