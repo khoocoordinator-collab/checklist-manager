@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Outlet, Team, ChecklistTemplate, TemplateItem, Schedule, ChecklistInstance, InstanceItem, Signature
+from .models import Outlet, Team, ChecklistTemplate, TemplateItem, Schedule, ChecklistInstance, InstanceItem, Signature, FlaggedItem
 
 
 class TemplateItemSerializer(serializers.ModelSerializer):
@@ -48,12 +48,28 @@ class ScheduleSerializer(serializers.ModelSerializer):
         ]
 
 
-class InstanceItemSerializer(serializers.ModelSerializer):
+class FlaggedItemSerializer(serializers.ModelSerializer):
     photo_url = serializers.SerializerMethodField()
 
     class Meta:
+        model = FlaggedItem
+        fields = ['id', 'description', 'photo_url', 'photo_uploaded_at', 'flagged_at', 'resolved_at']
+        read_only_fields = ['photo']
+
+    def get_photo_url(self, obj):
+        if obj.photo:
+            request = self.context.get('request')
+            return request.build_absolute_uri(obj.photo.url) if request else obj.photo.url
+        return None
+
+
+class InstanceItemSerializer(serializers.ModelSerializer):
+    photo_url = serializers.SerializerMethodField()
+    current_flag = serializers.SerializerMethodField()
+
+    class Meta:
         model = InstanceItem
-        fields = ['id', 'template_item_id', 'item_text', 'response_type', 'response_value', 'is_checked', 'checked_at', 'notes', 'photo', 'photo_url', 'photo_uploaded_at']
+        fields = ['id', 'template_item_id', 'item_text', 'response_type', 'response_value', 'is_checked', 'checked_at', 'notes', 'photo', 'photo_url', 'photo_uploaded_at', 'current_flag']
         read_only_fields = ['photo']  # Photo can only be set via upload endpoint, not sync
 
     def get_photo_url(self, obj):
@@ -62,6 +78,12 @@ class InstanceItemSerializer(serializers.ModelSerializer):
             if request:
                 return request.build_absolute_uri(obj.photo.url)
             return obj.photo.url
+        return None
+
+    def get_current_flag(self, obj):
+        flag = obj.flags.filter(resolved_at__isnull=True).first()
+        if flag:
+            return FlaggedItemSerializer(flag, context=self.context).data
         return None
 
 

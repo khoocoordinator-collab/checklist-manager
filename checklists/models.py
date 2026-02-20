@@ -312,6 +312,14 @@ def photo_upload_path(instance, filename):
     return f"photos/{now.year}/{now.month:02d}/{now.day:02d}/{new_filename}"
 
 
+def flag_photo_upload_path(instance, filename):
+    """Generate unique path for flag photo uploads: flag_photos/YYYY/MM/DD/uuid.jpg"""
+    ext = filename.split('.')[-1].lower()
+    new_filename = f"{uuid.uuid4()}.{ext}"
+    now = datetime.now()
+    return f"flag_photos/{now.year}/{now.month:02d}/{now.day:02d}/{new_filename}"
+
+
 class InstanceItem(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     instance = models.ForeignKey(ChecklistInstance, related_name='items', on_delete=models.CASCADE)
@@ -327,6 +335,28 @@ class InstanceItem(models.Model):
 
     def __str__(self):
         return f"{self.item_text[:50]} - {'✓' if self.is_checked else '○'}"
+
+
+class FlaggedItem(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    instance_item = models.ForeignKey(
+        InstanceItem, on_delete=models.CASCADE, related_name='flags'
+    )
+    description = models.TextField(blank=True)
+    photo = models.ImageField(upload_to=flag_photo_upload_path, null=True, blank=True)
+    photo_uploaded_at = models.DateTimeField(null=True, blank=True)
+    flagged_at = models.DateTimeField(default=timezone.now)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-flagged_at']
+
+    @property
+    def is_active(self):
+        return self.resolved_at is None
+
+    def __str__(self):
+        return f"Flag on {self.instance_item.item_text[:30]}"
 
 
 class Signature(models.Model):

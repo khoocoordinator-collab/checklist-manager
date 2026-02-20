@@ -4,11 +4,11 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.utils import timezone
 from django.db import transaction
-from .models import Team, ChecklistTemplate, TemplateItem, Schedule, ChecklistInstance, InstanceItem, Signature
+from .models import Team, ChecklistTemplate, TemplateItem, Schedule, ChecklistInstance, InstanceItem, Signature, FlaggedItem
 from .serializers import (
     TeamSerializer, ChecklistTemplateSerializer, ChecklistTemplateCreateSerializer,
     ScheduleSerializer, ChecklistInstanceSerializer, InstanceItemSerializer,
-    SignatureSerializer
+    SignatureSerializer, FlaggedItemSerializer
 )
 
 
@@ -330,6 +330,170 @@ def supervisor_verify(request):
         'message': 'Checklist verified successfully',
         'instance': ChecklistInstanceSerializer(instance).data
     })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def flags_view(request):
+    """
+    GET /api/flags/?team=<supervisor_team_id>
+    Returns all active (unresolved) flags for the outlet of the supervisor team.
+    """
+    team_id = request.query_params.get('team')
+    if not team_id:
+        return Response({'error': 'team parameter required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        team = Team.objects.get(id=team_id)
+    except (Team.DoesNotExist, Exception):
+        return Response({'error': 'Team not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    flags = FlaggedItem.objects.filter(
+        resolved_at__isnull=True,
+        instance_item__instance__team__outlet=team.outlet
+    ).select_related(
+        'instance_item__instance__team',
+        'instance_item__instance__template'
+    ).order_by('-flagged_at')
+
+    result = []
+    for flag in flags:
+        item = flag.instance_item
+        instance = item.instance
+        photo_url = None
+        if flag.photo:
+            photo_url = request.build_absolute_uri(flag.photo.url)
+        result.append({
+            'flag_id': str(flag.id),
+            'description': flag.description,
+            'photo_url': photo_url,
+            'photo_uploaded_at': flag.photo_uploaded_at,
+            'flagged_at': flag.flagged_at,
+            'item_text': item.item_text,
+            'instance_id': str(instance.id),
+            'checklist_title': instance.template.title if instance.template else '',
+            'date_label': instance.date_label,
+            'team_name': instance.team.name if instance.team else '',
+        })
+
+    return Response(result)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def flag_item(request):
+    """
+    POST /api/flag-item/
+    Body: { item_id, description }
+    Creates or updates the active FlaggedItem for an InstanceItem.
+    """
+    item_id = request.data.get('item_id')
+    description = request.data.get('description', '')
+
+    if not item_id:
+        return Response({'error': 'item_id required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        item = InstanceItem.objects.get(id=item_id)
+    except InstanceItem.DoesNotExist:
+        return Response({'error': 'Item not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Find or create active flag
+    flag = item.flags.filter(resolved_at__isnull=True).first()
+    if flag:
+        flag.description = description
+        flag.save(update_fields=['description'])
+    else:
+        flag = FlaggedItem.objects.create(
+            instance_item=item,
+            description=description,
+        )
+
+    photo_url = None
+    if flag.photo:
+        photo_url = request.build_absolute_uri(flag.photo.url)
+
+    return Response({
+        'flag_id': str(flag.id),
+        'description': flag.description,
+        'flagged_at': flag.flagged_at,
+        'photo_url': photo_url,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def upload_flag_photo(request):
+    """
+    POST /api/upload-flag-photo/
+    Expected: multipart/form-data with 'photo' file and 'item_id'
+    Attaches the photo to the active FlaggedItem for the given item.
+    """
+    item_id = request.data.get('item_id')
+    photo = request.FILES.get('photo')
+
+    if not item_id:
+        return Response({'error': 'item_id required'}, status=status.HTTP_400_BAD_REQUEST)
+    if not photo:
+        return Response({'error': 'photo file required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    allowed_types = ['image/jpeg', 'image/png', 'image/webp']
+    if photo.content_type not in allowed_types:
+        return Response({'error': 'Invalid file type. Allowed: JPEG, PNG, WebP'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if photo.size > 10 * 1024 * 1024:
+        return Response({'error': 'File too large. Max 10MB.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        item = InstanceItem.objects.get(id=item_id)
+    except InstanceItem.DoesNotExist:
+        return Response({'error': 'Item not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Find or create active flag
+    flag = item.flags.filter(resolved_at__isnull=True).first()
+    if not flag:
+        flag = FlaggedItem.objects.create(instance_item=item)
+
+    # Delete old flag photo if exists
+    if flag.photo:
+        flag.photo.delete(save=False)
+
+    flag.photo = photo
+    flag.photo_uploaded_at = timezone.now()
+    flag.save(update_fields=['photo', 'photo_uploaded_at'])
+
+    return Response({
+        'success': True,
+        'flag_photo_url': request.build_absolute_uri(flag.photo.url),
+        'flag_photo_uploaded_at': flag.photo_uploaded_at,
+        'flag_id': str(flag.id),
+    })
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def clear_flag(request):
+    """
+    POST /api/clear-flag/
+    Body: { item_id }
+    Resolves the active FlaggedItem for an InstanceItem.
+    """
+    item_id = request.data.get('item_id')
+
+    if not item_id:
+        return Response({'error': 'item_id required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        item = InstanceItem.objects.get(id=item_id)
+    except InstanceItem.DoesNotExist:
+        return Response({'error': 'Item not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    flag = item.flags.filter(resolved_at__isnull=True).first()
+    if flag:
+        flag.resolved_at = timezone.now()
+        flag.save(update_fields=['resolved_at'])
+
+    return Response({'success': True})
 
 
 class SignatureViewSet(viewsets.ModelViewSet):

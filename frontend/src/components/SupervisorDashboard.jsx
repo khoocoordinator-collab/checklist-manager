@@ -69,7 +69,8 @@ function CountdownTimer({ deadline, isExpired, label = 'Time' }) {
 function SupervisorDashboard({ team, onLogout }) {
   const [awaitingVerification, setAwaitingVerification] = useState([])
   const [verifiedToday, setVerifiedToday] = useState([])
-  const [activeTab, setActiveTab] = useState('awaiting') // 'awaiting' | 'verified'
+  const [flaggedItems, setFlaggedItems] = useState([])
+  const [activeTab, setActiveTab] = useState('awaiting') // 'awaiting' | 'verified' | 'reports'
   const [loading, setLoading] = useState(true)
   const [selectedChecklist, setSelectedChecklist] = useState(null)
   const [supervisorName, setSupervisorName] = useState('')
@@ -78,12 +79,12 @@ function SupervisorDashboard({ team, onLogout }) {
   const [enlargedPhoto, setEnlargedPhoto] = useState(null)
 
   useEffect(() => {
-    loadAwaitingChecklists()
-    const interval = setInterval(loadAwaitingChecklists, 30000)
+    loadData()
+    const interval = setInterval(loadData, 30000)
     return () => clearInterval(interval)
   }, [team.id])
 
-  const loadAwaitingChecklists = async () => {
+  const loadData = async () => {
     setLoading(true)
     try {
       // Fetch awaiting verification
@@ -100,17 +101,21 @@ function SupervisorDashboard({ team, onLogout }) {
       const verifiedResponse = await fetch(`${API_BASE}/api/instances/?status=verified&supervisor_team=${team.id}`)
       if (verifiedResponse.ok) {
         const allVerified = await verifiedResponse.json()
-        // Filter for today's date based on supervisor_signed_at or date_label
         const todaysVerified = allVerified.filter(instance => {
-          // Check if verified today by supervisor_signed_at
           if (instance.supervisor_signed_at) {
             const signedDate = instance.supervisor_signed_at.split('T')[0]
             return signedDate === today
           }
-          // Fallback to date_label
           return instance.date_label === today
         })
         setVerifiedToday(todaysVerified)
+      }
+
+      // Fetch active flags for this outlet
+      const flagsResponse = await fetch(`${API_BASE}/api/flags/?team=${team.id}`)
+      if (flagsResponse.ok) {
+        const flagsData = await flagsResponse.json()
+        setFlaggedItems(flagsData)
       }
     } catch (err) {
       console.error('Network error:', err)
@@ -158,7 +163,7 @@ function SupervisorDashboard({ team, onLogout }) {
         setVerifyMessage('✅ Checklist verified successfully!')
         setTimeout(() => {
           closeChecklistDetail()
-          loadAwaitingChecklists()
+          loadData()
         }, 1500)
       } else {
         const error = await response.json()
@@ -261,6 +266,13 @@ function SupervisorDashboard({ team, onLogout }) {
               Verified Today
               {verifiedToday.length > 0 && <span className="tab-badge">{verifiedToday.length}</span>}
             </button>
+            <button
+              className={`tab ${activeTab === 'reports' ? 'active' : ''}`}
+              onClick={() => setActiveTab('reports')}
+            >
+              🚩 Flags
+              {flaggedItems.length > 0 && <span className="tab-badge">{flaggedItems.length}</span>}
+            </button>
           </div>
 
           <section>
@@ -314,7 +326,7 @@ function SupervisorDashboard({ team, onLogout }) {
                   </div>
                 )}
               </>
-            ) : (
+            ) : activeTab === 'verified' ? (
               <>
                 <div className="section-header">
                   <h2>Verified Today</h2>
@@ -351,6 +363,60 @@ function SupervisorDashboard({ team, onLogout }) {
                               </span>
                             )}
                             <span className="view-text">View →</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="section-header">
+                  <h2>🚩 Active Flags</h2>
+                </div>
+
+                {flaggedItems.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-state-icon">✅</div>
+                    <p>No active flags</p>
+                    <p className="empty-state-sub">All items are clear</p>
+                  </div>
+                ) : (
+                  <div className="checklist-list">
+                    {flaggedItems.map(flag => (
+                      <div key={flag.flag_id} className="checklist-card" style={{ borderLeft: '4px solid #ef4444' }}>
+                        <div className="checklist-card-inner">
+                          <div className="checklist-main">
+                            <h3 className="checklist-title" style={{ color: '#ef4444' }}>🚩 {flag.item_text}</h3>
+                            <div className="checklist-meta">
+                              <span>📋 {flag.checklist_title}</span>
+                              <span>📅 {flag.date_label}</span>
+                              <span>🏢 {flag.team_name}</span>
+                            </div>
+                            {flag.description && (
+                              <p style={{ margin: '6px 0 0', fontSize: '13px', color: '#555' }}>
+                                {flag.description}
+                              </p>
+                            )}
+                            {flag.photo_url && (
+                              <div style={{ marginTop: '8px' }}>
+                                <img
+                                  src={flag.photo_url}
+                                  alt="Flag evidence"
+                                  style={{ maxWidth: '120px', maxHeight: '90px', objectFit: 'cover', borderRadius: '6px', cursor: 'pointer' }}
+                                  onClick={() => openEnlargedPhoto(flag.photo_url)}
+                                />
+                              </div>
+                            )}
+                          </div>
+                          <div className="checklist-status-col">
+                            <span className="status-badge" style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca' }}>
+                              Flagged
+                            </span>
+                            <span style={{ fontSize: '11px', color: '#888' }}>
+                              {formatDate(flag.flagged_at)}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -405,11 +471,27 @@ function SupervisorDashboard({ team, onLogout }) {
                       {item.is_checked ? '✓' : '✗'}
                     </span>
                     <div className="item-content">
-                      <p className="item-text">{item.item_text}</p>
+                      <p className="item-text">
+                        {item.item_text}
+                        {!!item.current_flag && <span style={{ marginLeft: '6px' }}>🚩</span>}
+                      </p>
                       <div className="item-tags">
                         {renderItemResponse(item)}
                         {item.notes && (
                           <span className="tag tag-notes">📝 {item.notes}</span>
+                        )}
+                        {item.current_flag && (
+                          <span className="tag" style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca' }}>
+                            🚩 {item.current_flag.description || 'Flagged'}
+                          </span>
+                        )}
+                        {item.current_flag?.photo_url && (
+                          <img
+                            src={item.current_flag.photo_url}
+                            alt="Flag evidence"
+                            style={{ maxWidth: '80px', maxHeight: '60px', objectFit: 'cover', borderRadius: '4px', cursor: 'pointer', marginTop: '4px' }}
+                            onClick={() => openEnlargedPhoto(item.current_flag.photo_url)}
+                          />
                         )}
                       </div>
                     </div>

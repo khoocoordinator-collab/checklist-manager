@@ -6,11 +6,15 @@ function ChecklistForm({ checklist, team, onBack }) {
   const [items, setItems] = useState(checklist?.items || [])
   const [saved, setSaved] = useState(false)
   const [activeNoteItem, setActiveNoteItem] = useState(null)
+  const [activeFlagItem, setActiveFlagItem] = useState(null)
+  const [flagDescription, setFlagDescription] = useState('')
   const [completedBy, setCompletedBy] = useState(checklist?.completed_by || '')
   const [signatureData, setSignatureData] = useState(checklist?.signature_data || null)
   const [showSignaturePad, setShowSignaturePad] = useState(false)
   const [uploadingPhoto, setUploadingPhoto] = useState(null)
+  const [uploadingFlagPhoto, setUploadingFlagPhoto] = useState(null)
   const fileInputRefs = useRef({})
+  const flagPhotoInputRefs = useRef({})
 
   const isExpired = checklist?.status === 'expired' || checklist?.is_expired
   const isReadOnly = isExpired || checklist?.status === 'completed' || checklist?.status === 'verified'
@@ -94,7 +98,6 @@ function ChecklistForm({ checklist, team, onBack }) {
     if (file) {
       uploadPhoto(itemId, file)
     }
-    // Reset input so same file can be selected again
     event.target.value = ''
   }
 
@@ -239,7 +242,124 @@ function ChecklistForm({ checklist, team, onBack }) {
     setActiveNoteItem(null)
   }
 
+  const openFlagPopup = (item) => {
+    setActiveFlagItem(item.id)
+    setFlagDescription(item.current_flag?.description || '')
+  }
+
+  const closeFlagPopup = () => {
+    setActiveFlagItem(null)
+    setFlagDescription('')
+  }
+
+  // Save flag (description) via API
+  const saveFlagDescription = async () => {
+    if (!activeFlagItem) return
+    try {
+      const response = await fetch(`${API_BASE}/api/flag-item/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_id: activeFlagItem, description: flagDescription })
+      })
+      const data = await response.json()
+      if (data.flag_id) {
+        setItems(prev => prev.map(item => {
+          if (item.id === activeFlagItem) {
+            return {
+              ...item,
+              current_flag: {
+                id: data.flag_id,
+                description: data.description,
+                flagged_at: data.flagged_at,
+                photo_url: data.photo_url,
+                photo_uploaded_at: item.current_flag?.photo_uploaded_at || null,
+                resolved_at: null,
+              }
+            }
+          }
+          return item
+        }))
+      }
+    } catch (err) {
+      console.error('Flag save error:', err)
+      alert('Network error saving flag')
+    }
+    closeFlagPopup()
+  }
+
+  // Upload flag photo via API
+  const uploadFlagPhoto = async (itemId, file) => {
+    setUploadingFlagPhoto(itemId)
+    try {
+      const compressedBlob = await compressImage(file, 800, 0.8)
+      const formData = new FormData()
+      formData.append('item_id', itemId)
+      formData.append('photo', compressedBlob, 'flag_photo.jpg')
+
+      const response = await fetch(`${API_BASE}/api/upload-flag-photo/`, {
+        method: 'POST',
+        body: formData
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setItems(prev => prev.map(item => {
+          if (item.id === itemId) {
+            const existingFlag = item.current_flag || {}
+            return {
+              ...item,
+              current_flag: {
+                ...existingFlag,
+                id: data.flag_id,
+                photo_url: data.flag_photo_url,
+                photo_uploaded_at: data.flag_photo_uploaded_at,
+                resolved_at: null,
+              }
+            }
+          }
+          return item
+        }))
+      } else {
+        alert('Flag photo upload failed: ' + (data.error || 'Unknown error'))
+      }
+    } catch (err) {
+      console.error('Flag photo upload error:', err)
+      alert('Network error uploading flag photo')
+    } finally {
+      setUploadingFlagPhoto(null)
+    }
+  }
+
+  const handleFlagPhotoCapture = (itemId, event) => {
+    const file = event.target.files[0]
+    if (file) {
+      uploadFlagPhoto(itemId, file)
+    }
+    event.target.value = ''
+  }
+
+  // Clear flag via API
+  const clearFlag = async (itemId) => {
+    try {
+      await fetch(`${API_BASE}/api/clear-flag/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_id: itemId })
+      })
+      setItems(prev => prev.map(item => {
+        if (item.id === itemId) {
+          return { ...item, current_flag: null }
+        }
+        return item
+      }))
+    } catch (err) {
+      console.error('Clear flag error:', err)
+      alert('Network error clearing flag')
+    }
+  }
+
   const activeItem = items.find(i => i.id === activeNoteItem)
+  const activeFlagItemData = items.find(i => i.id === activeFlagItem)
 
   const renderNoteButton = (item) => (
     <button
@@ -250,6 +370,18 @@ function ChecklistForm({ checklist, team, onBack }) {
       className={`btn-note ${item.notes ? 'has-note' : ''}`}
     >
       📝
+    </button>
+  )
+
+  const renderFlagButton = (item) => (
+    <button
+      type="button"
+      onClick={() => openFlagPopup(item)}
+      title={item.current_flag ? 'View flag' : 'Flag this item'}
+      className={`btn-note ${item.current_flag ? 'has-note' : ''}`}
+      style={{ marginLeft: '4px' }}
+    >
+      🚩
     </button>
   )
 
@@ -281,6 +413,7 @@ function ChecklistForm({ checklist, team, onBack }) {
             N/A
           </button>
           {renderNoteButton(item)}
+          {renderFlagButton(item)}
         </div>
       )
     }
@@ -297,6 +430,7 @@ function ChecklistForm({ checklist, team, onBack }) {
             className={`item-input ${isComplete ? 'complete' : ''}`}
           />
           {renderNoteButton(item)}
+          {renderFlagButton(item)}
         </div>
       )
     }
@@ -313,6 +447,7 @@ function ChecklistForm({ checklist, team, onBack }) {
             className={`item-input ${isComplete ? 'complete' : ''}`}
           />
           {renderNoteButton(item)}
+          {renderFlagButton(item)}
         </div>
       )
     }
@@ -352,6 +487,7 @@ function ChecklistForm({ checklist, team, onBack }) {
             </button>
           )}
           {renderNoteButton(item)}
+          {renderFlagButton(item)}
         </div>
       )
     }
@@ -430,7 +566,7 @@ function ChecklistForm({ checklist, team, onBack }) {
           </div>
         </div>
         <div className="progress-bar">
-          <div 
+          <div
             className={`progress-fill ${allComplete ? 'complete' : ''}`}
             style={{ width: `${progress}%` }}
           />
@@ -456,7 +592,10 @@ function ChecklistForm({ checklist, team, onBack }) {
           >
             <div className="item-main">
               <span className="item-number">{index + 1}</span>
-              <p className="item-text">{item.item_text}</p>
+              <p className="item-text">
+                {item.item_text}
+                {!!item.current_flag && <span style={{ marginLeft: '6px' }}>🚩</span>}
+              </p>
             </div>
             {renderResponseInput(item, index)}
           </div>
@@ -478,6 +617,81 @@ function ChecklistForm({ checklist, team, onBack }) {
             <div className="modal-actions">
               <button onClick={closeNotePopup} className="btn-secondary">Cancel</button>
               <button onClick={closeNotePopup} className="btn-save" style={{ width: 'auto', padding: '8px 20px' }}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Flag Modal */}
+      {activeFlagItemData && (
+        <div className="modal-overlay" onClick={closeFlagPopup}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h3>🚩 Flag Item</h3>
+            <p style={{ fontSize: '13px', color: '#666', marginBottom: '12px' }}>{activeFlagItemData.item_text}</p>
+            <textarea
+              value={flagDescription}
+              onChange={(e) => setFlagDescription(e.target.value)}
+              placeholder="Describe the issue..."
+              autoFocus
+            />
+
+            {/* Flag photo section */}
+            <div style={{ marginTop: '12px' }}>
+              <input
+                type="file"
+                ref={el => flagPhotoInputRefs.current[activeFlagItemData.id] = el}
+                accept="image/*"
+                capture="environment"
+                onChange={(e) => handleFlagPhotoCapture(activeFlagItemData.id, e)}
+                disabled={uploadingFlagPhoto === activeFlagItemData.id}
+                style={{ display: 'none' }}
+              />
+              {activeFlagItemData.current_flag?.photo_url ? (
+                <div style={{ marginBottom: '8px' }}>
+                  <img
+                    src={activeFlagItemData.current_flag.photo_url}
+                    alt="Flag evidence"
+                    style={{ width: '100%', maxHeight: '160px', objectFit: 'cover', borderRadius: '6px' }}
+                  />
+                  <button
+                    onClick={() => flagPhotoInputRefs.current[activeFlagItemData.id]?.click()}
+                    disabled={uploadingFlagPhoto === activeFlagItemData.id}
+                    className="btn-secondary"
+                    style={{ marginTop: '6px', width: '100%' }}
+                  >
+                    {uploadingFlagPhoto === activeFlagItemData.id ? '⏳ Uploading...' : '📷 Retake Photo'}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => flagPhotoInputRefs.current[activeFlagItemData.id]?.click()}
+                  disabled={uploadingFlagPhoto === activeFlagItemData.id}
+                  className="btn-secondary"
+                  style={{ width: '100%', marginBottom: '8px' }}
+                >
+                  {uploadingFlagPhoto === activeFlagItemData.id ? '⏳ Uploading...' : '📷 Add Photo Evidence'}
+                </button>
+              )}
+            </div>
+
+            <div className="modal-actions">
+              <button onClick={closeFlagPopup} className="btn-secondary">Cancel</button>
+              {activeFlagItemData.current_flag && (
+                <button
+                  onClick={async () => { await clearFlag(activeFlagItemData.id); closeFlagPopup() }}
+                  className="btn-secondary btn-danger"
+                  style={{ width: 'auto', padding: '8px 16px' }}
+                >
+                  Clear Flag
+                </button>
+              )}
+              <button
+                onClick={saveFlagDescription}
+                className="btn-save"
+                style={{ width: 'auto', padding: '8px 20px' }}
+              >
+                Save Flag
+              </button>
             </div>
           </div>
         </div>
@@ -531,8 +745,8 @@ function ChecklistForm({ checklist, team, onBack }) {
       {/* Save Button */}
       {!isReadOnly && (
         <div className="form-actions">
-          <button 
-            onClick={saveChecklist} 
+          <button
+            onClick={saveChecklist}
             className={`btn-save ${saved ? 'saved' : ''}`}
           >
             {saved ? '✓ Saved!' : 'Save Checklist'}
