@@ -719,6 +719,26 @@ function SupervisorDashboard({ team, onLogout }) {
             </div>
           )}
 
+          {/* Items (read-only for verified/rejected checklists) */}
+          {selectedChecklist.status === 'verified' && selectedChecklist.items?.length > 0 && (
+            <div className="review-items-readonly">
+              <h4>Checklist Items</h4>
+              {selectedChecklist.items.map((item) => (
+                <div key={item.id} className="review-item-row">
+                  <div className="review-item-main">
+                    <p className="review-item-text">{item.item_text}</p>
+                    <div className="review-item-response">{renderItemResponse(item)}</div>
+                  </div>
+                  {item.supervisor_confirmed !== null && (
+                    <span className={`tag ${item.supervisor_confirmed ? 'tag-yes' : 'tag-no'}`}>
+                      {item.supervisor_confirmed ? '✓' : '✗'}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Staff Signature */}
           {selectedChecklist.signature_data && (
             <div className="signature-display">
