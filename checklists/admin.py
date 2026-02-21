@@ -2,13 +2,14 @@ from django.contrib import admin
 from django.db import models
 from django.utils import timezone
 from django.utils.html import format_html
-from django.urls import path
+from django.urls import path, reverse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib import messages
 from django.forms import Textarea, ModelForm, ValidationError, ChoiceField
 from django.contrib.auth.admin import GroupAdmin as BaseGroupAdmin
 from django.contrib.auth.models import Group
-from .models import Outlet, Team, ChecklistTemplate, TemplateItem, Schedule, ChecklistInstance, InstanceItem, Signature, FlaggedItem, GroupOutletScope
+from urllib.parse import urlencode
+from .models import Outlet, Team, ChecklistTemplate, TemplateItem, Schedule, ChecklistInstance, InstanceItem, Signature, FlaggedItem, GroupOutletScope, LibraryTemplate, LibraryTask
 
 
 
@@ -48,6 +49,45 @@ class TeamAdmin(admin.ModelAdmin):
     list_display = ['name', 'outlet', 'staff_pin', 'supervisor_pin', 'created_at']
     list_filter = ['outlet']
     search_fields = ['name', 'outlet__name']
+
+
+# ─── Checklist Library ────────────────────────────────────────────────────────
+
+class LibraryTaskInline(admin.TabularInline):
+    model = LibraryTask
+    extra = 1
+    fields = ['task_name', 'task_type', 'order']
+
+
+@admin.register(LibraryTemplate)
+class LibraryTemplateAdmin(admin.ModelAdmin):
+    list_display = ['name', 'suggested_for', 'task_count', 'created_at']
+    list_filter = ['suggested_for']
+    search_fields = ['name', 'suggested_for']
+    fields = ['name', 'suggested_for']
+    inlines = [LibraryTaskInline]
+    actions = ['create_checklist_from_selected']
+
+    def task_count(self, obj):
+        return obj.tasks.count()
+    task_count.short_description = 'Tasks'
+
+    @admin.action(description='Create checklist template from selected')
+    def create_checklist_from_selected(self, request, queryset):
+        if queryset.count() != 1:
+            messages.error(request, 'Please select exactly one library template.')
+            return
+        lib = queryset.first()
+        if not lib.tasks.exists():
+            messages.error(request, f'Library template "{lib.name}" has no tasks. Add tasks first.')
+            return
+        task_data = list(lib.tasks.values('task_name', 'task_type', 'order'))
+        request.session['_library_template'] = {
+            'name': lib.name,
+            'tasks': task_data,
+        }
+        url = reverse('admin:checklists_checklisttemplate_add')
+        return redirect(f'{url}?{urlencode({"title": lib.name})}')
 
 
 class TemplateItemInline(admin.TabularInline):
@@ -106,6 +146,30 @@ class ChecklistTemplateAdmin(admin.ModelAdmin):
         if not change:
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
+
+    def add_view(self, request, form_url='', extra_context=None):
+        if '_library_template' in request.session:
+            lib = request.session['_library_template']
+            count = len(lib['tasks'])
+            messages.info(
+                request,
+                f'Creating from library: "{lib["name"]}" ({count} task{"s" if count != 1 else ""}). '
+                f'Select a team, then save. Tasks will be added automatically.'
+            )
+        return super().add_view(request, form_url, extra_context)
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        if not change and '_library_template' in request.session:
+            lib = request.session.pop('_library_template')
+            for task in lib['tasks']:
+                TemplateItem.objects.create(
+                    template=form.instance,
+                    text=task['task_name'],
+                    order=task['order'],
+                    is_required=True,
+                    response_type=task['task_type'],
+                )
 
     @admin.action(description='Duplicate selected templates')
     def duplicate_selected_templates(self, request, queryset):

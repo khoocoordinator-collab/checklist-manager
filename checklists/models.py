@@ -119,6 +119,44 @@ class Schedule(models.Model):
         return ''.join(parts)
 
 
+class LibraryTemplate(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=200)
+    suggested_for = models.CharField(
+        max_length=100, blank=True,
+        help_text="Advisory tag, e.g. 'Kitchen', 'Bar', 'Floor'"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        suffix = f" [{self.suggested_for}]" if self.suggested_for else ""
+        return f"{self.name}{suffix}"
+
+
+class LibraryTask(models.Model):
+    TASK_TYPE_CHOICES = [
+        ('yes_no', 'Yes / No'),
+        ('number', 'Number'),
+        ('text', 'Text'),
+        ('photo', 'Photo'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    library_template = models.ForeignKey(LibraryTemplate, on_delete=models.CASCADE, related_name='tasks')
+    task_name = models.CharField(max_length=48)
+    task_type = models.CharField(max_length=10, choices=TASK_TYPE_CHOICES, default='yes_no')
+    order = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ['order']
+
+    def __str__(self):
+        return self.task_name
+
+
 class ChecklistTemplate(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=200)
