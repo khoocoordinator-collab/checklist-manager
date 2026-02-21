@@ -122,20 +122,48 @@ def report_summary(request):
     total_completed = instances_qs.filter(status__in=['completed', 'verified']).count()
     total_instances = instances_qs.count()
 
-    # On-time completion rate: completed/verified instances that finished before deadline
+    # On-time completion rate, grouped by outlet or team
+    # If a single outlet is selected, break down by team; otherwise by outlet
+    outlet_filter = request.query_params.get('outlet')
     completed_instances = instances_qs.filter(
         status__in=['completed', 'verified']
-    ).select_related('template')
-    on_time = 0
-    with_deadline = 0
+    ).select_related('template', 'team__outlet')
+
+    on_time_buckets = {}  # key → {on_time, with_deadline, label}
+    on_time_total = 0
+    with_deadline_total = 0
+
     for inst in completed_instances:
         deadline = inst.get_deadline()
         if deadline is None:
             continue
-        with_deadline += 1
+
+        if outlet_filter:
+            key = str(inst.team_id)
+            label = inst.team.name if inst.team else 'Unknown'
+        else:
+            key = str(inst.team.outlet_id) if inst.team and inst.team.outlet else 'unknown'
+            label = inst.team.outlet.name if inst.team and inst.team.outlet else 'Unknown'
+
+        if key not in on_time_buckets:
+            on_time_buckets[key] = {'label': label, 'on_time': 0, 'with_deadline': 0}
+
+        on_time_buckets[key]['with_deadline'] += 1
+        with_deadline_total += 1
+
         completion_time = inst.synced_at or inst.created_at
         if completion_time and completion_time <= deadline:
-            on_time += 1
+            on_time_buckets[key]['on_time'] += 1
+            on_time_total += 1
+
+    on_time_breakdown = [
+        {
+            'label': b['label'],
+            'on_time': b['on_time'],
+            'with_deadline': b['with_deadline'],
+        }
+        for b in sorted(on_time_buckets.values(), key=lambda x: x['label'])
+    ]
 
     return Response({
         'active_flags': active_flags,
@@ -144,8 +172,9 @@ def report_summary(request):
         'open_reworks': open_reworks,
         'total_completed': total_completed,
         'total_instances': total_instances,
-        'on_time': on_time,
-        'with_deadline': with_deadline,
+        'on_time': on_time_total,
+        'with_deadline': with_deadline_total,
+        'on_time_breakdown': on_time_breakdown,
     })
 
 

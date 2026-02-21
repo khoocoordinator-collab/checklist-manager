@@ -4,6 +4,7 @@ import { apiFetch } from '../api.js';
 import { useFilters } from '../FiltersContext.jsx';
 import KPICard from '../components/KPICard.jsx';
 import GaugeChart from '../components/GaugeChart.jsx';
+import ProgressRing from '../components/ProgressRing.jsx';
 
 export default function OverviewPage() {
   const { queryString } = useFilters();
@@ -56,12 +57,19 @@ export default function OverviewPage() {
         </div>
       )}
 
-      {summary && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-          <GaugeChart
-            value={summary.with_deadline > 0 ? (summary.on_time / summary.with_deadline) * 100 : 0}
-            label="On-Time Completion Rate"
-          />
+      {summary && summary.on_time_breakdown && summary.on_time_breakdown.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-sm font-medium text-gray-400 mb-4">On-Time Completion Rate</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+            {summary.on_time_breakdown.map(b => (
+              <ProgressRing
+                key={b.label}
+                value={b.with_deadline > 0 ? (b.on_time / b.with_deadline) * 100 : 0}
+                label={b.label}
+                subtitle={`${b.on_time}/${b.with_deadline}`}
+              />
+            ))}
+          </div>
         </div>
       )}
 
