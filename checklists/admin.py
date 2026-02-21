@@ -19,6 +19,61 @@ from .models import Outlet, Team, ChecklistTemplate, TemplateItem, Schedule, Che
 logger = logging.getLogger(__name__)
 
 
+# ─── Outlet scoping helper ────────────────────────────────────────────────────
+
+def get_user_outlets(user):
+    """
+    Return the Outlets a Django admin user may access.
+    - Superusers → all outlets.
+    - Users in a group with NO GroupOutletScope rows → all outlets (global admin).
+    - Everyone else → union of outlets from their group scopes.
+    """
+    if user.is_superuser:
+        return Outlet.objects.all()
+    groups = user.groups.all()
+    if not groups.exists():
+        return Outlet.objects.none()
+    for group in groups:
+        if not group.outlet_scopes.exists():
+            return Outlet.objects.all()
+    outlet_ids = GroupOutletScope.objects.filter(
+        group__in=groups
+    ).values_list('outlet_id', flat=True)
+    return Outlet.objects.filter(id__in=outlet_ids)
+
+
+class OutletScopedMixin:
+    """
+    Mixin for ModelAdmin classes that should be scoped to the user's outlet(s).
+    Subclasses must define `outlet_filter_path` — the ORM lookup to Outlet from
+    the admin's model, e.g. 'outlet', 'team__outlet', or
+    'instance_item__instance__team__outlet'.
+    For OutletAdmin itself set `outlet_filter_path = None` (filter on pk).
+    """
+    outlet_filter_path = None  # override in each subclass
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        outlets = get_user_outlets(request.user)
+        if outlets.count() == Outlet.objects.count():
+            return qs  # global access — no filter needed
+        if self.outlet_filter_path is None:
+            return qs.filter(pk__in=outlets)
+        return qs.filter(**{f'{self.outlet_filter_path}__in': outlets})
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        outlets = get_user_outlets(request.user)
+        if outlets.count() < Outlet.objects.count():
+            if db_field.name == 'outlet':
+                kwargs['queryset'] = outlets
+            elif db_field.name == 'team':
+                kwargs['queryset'] = Team.objects.filter(outlet__in=outlets)
+            elif db_field.name == 'supervisor_team':
+                kwargs['queryset'] = Team.objects.filter(outlet__in=outlets)
+            elif db_field.name == 'template':
+                kwargs['queryset'] = ChecklistTemplate.objects.filter(team__outlet__in=outlets)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
 
 class ChecklistTemplateForm(ModelForm):
     """Custom form with dropdown for validity window hours."""
@@ -46,13 +101,15 @@ class ChecklistTemplateForm(ModelForm):
 
 
 @admin.register(Outlet)
-class OutletAdmin(admin.ModelAdmin):
+class OutletAdmin(OutletScopedMixin, admin.ModelAdmin):
+    outlet_filter_path = None  # pk-based filter (Outlet is the root)
     list_display = ['name', 'location', 'created_at']
     search_fields = ['name']
 
 
 @admin.register(Team)
-class TeamAdmin(admin.ModelAdmin):
+class TeamAdmin(OutletScopedMixin, admin.ModelAdmin):
+    outlet_filter_path = 'outlet'
     list_display = ['name', 'outlet', 'staff_pin', 'supervisor_pin', 'created_at']
     list_filter = ['outlet']
     search_fields = ['name', 'outlet__name']
@@ -256,7 +313,8 @@ class TemplateItemInline(admin.TabularInline):
 
 
 @admin.register(ChecklistTemplate)
-class ChecklistTemplateAdmin(admin.ModelAdmin):
+class ChecklistTemplateAdmin(OutletScopedMixin, admin.ModelAdmin):
+    outlet_filter_path = 'team__outlet'
     form = ChecklistTemplateForm
     list_display = ['title', 'team', 'schedule', 'requires_supervisor', 'created_by', 'created_at', 'is_hidden', 'generate_button']
     list_filter = ['is_hidden', 'requires_supervisor', 'team', 'schedule', 'created_at']
@@ -567,7 +625,8 @@ class ChecklistInstanceForm(ModelForm):
 
 
 @admin.register(ChecklistInstance)
-class ChecklistInstanceAdmin(admin.ModelAdmin):
+class ChecklistInstanceAdmin(OutletScopedMixin, admin.ModelAdmin):
+    outlet_filter_path = 'team__outlet'
     form = ChecklistInstanceForm
     list_display = ['date_label', 'template', 'team', 'status', 'completed_by', 'supervisor_team', 'supervisor_signed_off', 'deadline_display', 'created_at', 'synced_at']
     list_filter = ['status', 'team', 'supervisor_signed_off', 'created_at']
@@ -626,7 +685,8 @@ class ChecklistInstanceAdmin(admin.ModelAdmin):
 
 
 @admin.register(FlaggedItem)
-class FlaggedItemAdmin(admin.ModelAdmin):
+class FlaggedItemAdmin(OutletScopedMixin, admin.ModelAdmin):
+    outlet_filter_path = 'instance_item__instance__team__outlet'
     list_display = ['item_text_short', 'checklist_link', 'team_name', 'description_short', 'photo_thumb', 'flagged_at', 'status_display']
     list_filter = ['flagged_at', 'resolved_at', 'instance_item__instance__team__outlet']
     search_fields = ['description', 'instance_item__item_text', 'instance_item__instance__template__title']
