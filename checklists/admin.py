@@ -80,6 +80,12 @@ class AIChecklistForm(forms.Form):
         label='Description',
         help_text='Describe what this checklist is for (minimum 30 characters).',
     )
+    language = forms.ChoiceField(
+        choices=[('id', 'Bahasa Indonesia'), ('en', 'English')],
+        initial='id',
+        label='Language',
+        help_text='Language for the generated task names.',
+    )
     num_tasks = forms.IntegerField(
         min_value=1,
         max_value=30,
@@ -123,6 +129,7 @@ class LibraryTemplateAdmin(admin.ModelAdmin):
                 checklist_name = form.cleaned_data['checklist_name']
                 department = form.cleaned_data['suggested_department']
                 description = form.cleaned_data['description']
+                language = form.cleaned_data['language']
                 num_tasks = form.cleaned_data['num_tasks']
 
                 if not settings.ANTHROPIC_API_KEY:
@@ -136,6 +143,11 @@ class LibraryTemplateAdmin(admin.ModelAdmin):
                 try:
                     import anthropic
                     client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+                    lang_instruction = (
+                        'All task names must be written in Bahasa Indonesia.'
+                        if language == 'id' else
+                        'All task names must be written in English.'
+                    )
                     message = client.messages.create(
                         model='claude-sonnet-4-20250514',
                         max_tokens=1024,
@@ -144,6 +156,7 @@ class LibraryTemplateAdmin(admin.ModelAdmin):
                             'Every task must have a name (max 48 characters) and a type. '
                             'The type must be strictly one of these four values only: yes_no, photo, number, or text. '
                             'No other values are permitted. '
+                            f'{lang_instruction} '
                             'Respond with valid JSON in the format {"tasks": [{"task_name": "...", "task_type": "..."}]} '
                             'with no extra text or explanation.'
                         ),
