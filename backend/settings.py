@@ -154,6 +154,8 @@ CORS_ALLOWED_ORIGINS = [
     'http://64.23.197.153:80',
 ]
 
+CORS_ALLOW_CREDENTIALS = True
+
 # Add any additional CORS origins from environment
 additional_cors = os.environ.get('CORS_ALLOWED_ORIGINS', '')
 if additional_cors:

@@ -1,5 +1,5 @@
 from rest_framework import viewsets, status
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes, authentication_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.utils import timezone
@@ -181,6 +181,7 @@ class ChecklistInstanceViewSet(viewsets.ModelViewSet):
 
 
 @api_view(['POST'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def team_login(request):
     passcode = request.data.get('passcode')
@@ -198,6 +199,7 @@ def team_login(request):
 
 
 @api_view(['GET'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def pending_checklists(request):
     team_id = request.query_params.get('team')
@@ -230,6 +232,7 @@ def pending_checklists(request):
 
 
 @api_view(['POST'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def upload_photo(request):
     """
@@ -281,6 +284,7 @@ def upload_photo(request):
 
 
 @api_view(['POST'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def supervisor_verify(request):
     """
@@ -340,6 +344,7 @@ def supervisor_verify(request):
 
 
 @api_view(['POST'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def supervisor_review(request):
     """
@@ -437,6 +442,7 @@ def supervisor_review(request):
 
 
 @api_view(['POST'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def supervisor_rework(request):
     """
@@ -518,6 +524,7 @@ def supervisor_rework(request):
 
 
 @api_view(['GET'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def flags_view(request):
     """
@@ -576,6 +583,7 @@ def flags_view(request):
 
 
 @api_view(['POST'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def flag_item(request):
     """
@@ -618,6 +626,7 @@ def flag_item(request):
 
 
 @api_view(['POST'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def upload_flag_photo(request):
     """
@@ -667,6 +676,7 @@ def upload_flag_photo(request):
 
 
 @api_view(['POST'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def acknowledge_flag(request):
     """

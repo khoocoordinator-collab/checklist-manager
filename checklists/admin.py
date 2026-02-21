@@ -6,7 +6,9 @@ from django.urls import path
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib import messages
 from django.forms import Textarea, ModelForm, ValidationError, ChoiceField
-from .models import Outlet, Team, ChecklistTemplate, TemplateItem, Schedule, ChecklistInstance, InstanceItem, Signature, FlaggedItem
+from django.contrib.auth.admin import GroupAdmin as BaseGroupAdmin
+from django.contrib.auth.models import Group
+from .models import Outlet, Team, ChecklistTemplate, TemplateItem, Schedule, ChecklistInstance, InstanceItem, Signature, FlaggedItem, GroupOutletScope
 
 
 
@@ -456,3 +458,30 @@ class FlaggedItemAdmin(admin.ModelAdmin):
             )
         return format_html('<span style="color: #dc3545; font-weight: bold;">⚑ Active</span>')
     status_display.short_description = 'Status'
+
+
+# ─── Group admin with outlet scope inline ────────────────────────────────────
+
+class GroupOutletScopeInline(admin.TabularInline):
+    model = GroupOutletScope
+    extra = 1
+
+
+admin.site.unregister(Group)
+
+
+@admin.register(Group)
+class GroupAdmin(BaseGroupAdmin):
+    inlines = [GroupOutletScopeInline]
+    list_display = ['name', 'outlet_count']
+
+    def outlet_count(self, obj):
+        count = obj.outlet_scopes.count()
+        return 'Global' if count == 0 else str(count)
+    outlet_count.short_description = 'Outlets'
+
+
+@admin.register(GroupOutletScope)
+class GroupOutletScopeAdmin(admin.ModelAdmin):
+    list_display = ['group', 'outlet']
+    list_filter = ['group', 'outlet']

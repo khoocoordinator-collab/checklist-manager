@@ -3,7 +3,7 @@ from datetime import datetime, time, timedelta
 from django.db import models
 from django.utils import timezone
 from django.core.exceptions import ValidationError
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, Group
 
 
 class Outlet(models.Model):
@@ -405,3 +405,15 @@ class Signature(models.Model):
 
     def __str__(self):
         return f"Signature by {self.signed_by} on {self.instance.date_label}"
+
+
+class GroupOutletScope(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='outlet_scopes')
+    outlet = models.ForeignKey(Outlet, on_delete=models.CASCADE, related_name='group_scopes')
+
+    class Meta:
+        unique_together = ('group', 'outlet')
+
+    def __str__(self):
+        return f"{self.group.name} → {self.outlet.name}"
