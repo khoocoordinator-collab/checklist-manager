@@ -3,6 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { apiFetch } from '../api.js';
 import { useFilters } from '../FiltersContext.jsx';
 import KPICard from '../components/KPICard.jsx';
+import GaugeChart from '../components/GaugeChart.jsx';
 
 export default function OverviewPage() {
   const { queryString } = useFilters();
@@ -46,12 +47,21 @@ export default function OverviewPage() {
 
       {summary && (
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
-          <KPICard title="Active Flags" value={summary.active_flags} color="red" />
-          <KPICard title="Total Flags" value={summary.total_flags} color="yellow" />
-          <KPICard title="Expired Checklists" value={summary.expired_checklists} color="red" />
-          <KPICard title="Open Reworks" value={summary.open_reworks} color="yellow" />
+          <KPICard title="Active Flags" value={summary.active_flags} color="red" to="/reports/flagged-items?status=active" />
+          <KPICard title="Total Flags" value={summary.total_flags} color="yellow" to="/reports/flagged-items" />
+          <KPICard title="Expired Checklists" value={summary.expired_checklists} color="red" to="/reports/expired-checklists" />
+          <KPICard title="Open Reworks" value={summary.open_reworks} color="yellow" to="/reports/open-reworks" />
           <KPICard title="Completed" value={summary.total_completed} color="green" />
           <KPICard title="Total Instances" value={summary.total_instances} color="gray" />
+        </div>
+      )}
+
+      {summary && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+          <GaugeChart
+            value={summary.with_deadline > 0 ? (summary.on_time / summary.with_deadline) * 100 : 0}
+            label="On-Time Completion Rate"
+          />
         </div>
       )}
 

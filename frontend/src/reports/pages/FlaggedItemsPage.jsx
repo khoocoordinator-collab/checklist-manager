@@ -1,12 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { apiFetch } from '../api.js';
 import { useFilters } from '../FiltersContext.jsx';
 import ReportTable from '../components/ReportTable.jsx';
 
 export default function FlaggedItemsPage() {
   const { queryString } = useFilters();
+  const [searchParams] = useSearchParams();
   const [data, setData] = useState([]);
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || '');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -22,6 +24,25 @@ export default function FlaggedItemsPage() {
   }, [queryString, statusFilter]);
 
   const columns = useMemo(() => [
+    {
+      accessorKey: 'photo_url',
+      header: 'Photo',
+      enableSorting: false,
+      enableGlobalFilter: false,
+      cell: ({ getValue }) => {
+        const url = getValue();
+        if (!url) return <span className="text-gray-600">-</span>;
+        return (
+          <a href={url} target="_blank" rel="noopener noreferrer">
+            <img
+              src={url}
+              alt="Flag photo"
+              className="w-12 h-9 object-cover rounded border border-gray-700 hover:border-blue-500 transition-colors"
+            />
+          </a>
+        );
+      },
+    },
     { accessorKey: 'item_text', header: 'Item' },
     { accessorKey: 'description', header: 'Description' },
     { accessorKey: 'checklist_title', header: 'Checklist' },

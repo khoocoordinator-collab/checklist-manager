@@ -122,6 +122,21 @@ def report_summary(request):
     total_completed = instances_qs.filter(status__in=['completed', 'verified']).count()
     total_instances = instances_qs.count()
 
+    # On-time completion rate: completed/verified instances that finished before deadline
+    completed_instances = instances_qs.filter(
+        status__in=['completed', 'verified']
+    ).select_related('template')
+    on_time = 0
+    with_deadline = 0
+    for inst in completed_instances:
+        deadline = inst.get_deadline()
+        if deadline is None:
+            continue
+        with_deadline += 1
+        completion_time = inst.synced_at or inst.created_at
+        if completion_time and completion_time <= deadline:
+            on_time += 1
+
     return Response({
         'active_flags': active_flags,
         'total_flags': total_flags,
@@ -129,6 +144,8 @@ def report_summary(request):
         'open_reworks': open_reworks,
         'total_completed': total_completed,
         'total_instances': total_instances,
+        'on_time': on_time,
+        'with_deadline': with_deadline,
     })
 
 
