@@ -200,7 +200,10 @@ class ChecklistTemplateAdmin(admin.ModelAdmin):
                     date_label=date_label,
                     created_by=created_by,
                     status='pending',
-                    supervisor_team=supervisor_team
+                    supervisor_team=supervisor_team,
+                    validity_window_hours=template.validity_window_hours,
+                    supervisor_validity_window_hours=template.supervisor_validity_window_hours,
+                    scheduled_time=template.schedule.time_of_day if template.schedule else None,
                 )
 
                 for item in template.items.all():
@@ -230,7 +233,10 @@ class ChecklistTemplateAdmin(admin.ModelAdmin):
             team=template.team,
             date_label=date_label,
             created_by=created_by,
-            status='pending'
+            status='pending',
+            validity_window_hours=template.validity_window_hours,
+            supervisor_validity_window_hours=template.supervisor_validity_window_hours,
+            scheduled_time=template.schedule.time_of_day if template.schedule else None,
         )
 
         for item in template.items.all():

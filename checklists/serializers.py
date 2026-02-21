@@ -95,8 +95,8 @@ class InstanceItemSerializer(serializers.ModelSerializer):
 class ChecklistInstanceSerializer(serializers.ModelSerializer):
     items = InstanceItemSerializer(many=True)
     template_title = serializers.CharField(source='template.title', read_only=True)
-    template_validity_hours = serializers.IntegerField(source='template.validity_window_hours', read_only=True)
-    template_supervisor_validity_hours = serializers.IntegerField(source='template.supervisor_validity_window_hours', read_only=True)
+    template_validity_hours = serializers.SerializerMethodField()
+    template_supervisor_validity_hours = serializers.SerializerMethodField()
     signature_data = serializers.SerializerMethodField()
     supervisor_signature_data = serializers.SerializerMethodField()
     team_name = serializers.CharField(source='team.name', read_only=True)
@@ -153,8 +153,29 @@ class ChecklistInstanceSerializer(serializers.ModelSerializer):
     def get_is_supervisor_expired(self, obj):
         return obj.is_supervisor_expired()
 
+    def get_template_validity_hours(self, obj):
+        # Prefer snapshotted value; fall back to live template for legacy instances
+        if obj.validity_window_hours is not None:
+            return obj.validity_window_hours
+        return obj.template.validity_window_hours if obj.template else 3
+
+    def get_template_supervisor_validity_hours(self, obj):
+        # Prefer snapshotted value; fall back to live template for legacy instances
+        if obj.supervisor_validity_window_hours is not None:
+            return obj.supervisor_validity_window_hours
+        return obj.template.supervisor_validity_window_hours if obj.template else 2
+
     def create(self, validated_data):
         items_data = validated_data.pop('items')
+        # Snapshot validity windows from template so later template edits
+        # don't retroactively change deadlines on existing instances.
+        template = validated_data.get('template')
+        if template and validated_data.get('validity_window_hours') is None:
+            validated_data['validity_window_hours'] = template.validity_window_hours
+        if template and validated_data.get('supervisor_validity_window_hours') is None:
+            validated_data['supervisor_validity_window_hours'] = template.supervisor_validity_window_hours
+        if template and validated_data.get('scheduled_time') is None and template.schedule:
+            validated_data['scheduled_time'] = template.schedule.time_of_day
         instance = ChecklistInstance.objects.create(**validated_data)
         for item_data in items_data:
             InstanceItem.objects.create(instance=instance, **item_data)

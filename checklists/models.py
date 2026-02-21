@@ -195,6 +195,20 @@ class ChecklistInstance(models.Model):
     synced_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='pending')
 
+    # Snapshotted at instance creation so template changes don't retroactively affect deadlines
+    validity_window_hours = models.IntegerField(
+        null=True, blank=True,
+        help_text="Snapshotted from template at creation time."
+    )
+    supervisor_validity_window_hours = models.IntegerField(
+        null=True, blank=True,
+        help_text="Snapshotted from template at creation time."
+    )
+    scheduled_time = models.TimeField(
+        null=True, blank=True,
+        help_text="Snapshotted from template schedule at creation time. Null for manually-created instances."
+    )
+
     # Supervisor verification fields
     supervisor_team = models.ForeignKey(Team, on_delete=models.SET_NULL, null=True, blank=True,
                                        related_name='verified_checklists',
@@ -214,7 +228,10 @@ class ChecklistInstance(models.Model):
         if not self.template:
             return None
 
-        validity_hours = self.template.validity_window_hours
+        # Prefer snapshotted value; fall back to live template for legacy instances
+        validity_hours = self.validity_window_hours
+        if validity_hours is None:
+            validity_hours = self.template.validity_window_hours
 
         # 0 means unlimited - no deadline
         if validity_hours == 0:
@@ -224,15 +241,22 @@ class ChecklistInstance(models.Model):
         if validity_hours is None:
             validity_hours = 3
 
-        if self.template.schedule:
-            # Scheduled checklist — deadline = scheduled time + validity window
+        if self.scheduled_time is not None:
+            # Snapshotted scheduled time — not affected by template/schedule edits
+            try:
+                base_date = datetime.strptime(self.date_label, '%Y-%m-%d').date()
+            except ValueError:
+                return None
+            scheduled_datetime = datetime.combine(base_date, self.scheduled_time)
+            scheduled_datetime = timezone.make_aware(scheduled_datetime, timezone.get_current_timezone())
+        elif self.template and self.template.schedule:
+            # Legacy fallback for instances created before snapshotting
             schedule = self.template.schedule
             try:
                 base_date = datetime.strptime(self.date_label, '%Y-%m-%d').date()
             except ValueError:
                 return None
-            scheduled_time = schedule.time_of_day or time(8, 0)
-            scheduled_datetime = datetime.combine(base_date, scheduled_time)
+            scheduled_datetime = datetime.combine(base_date, schedule.time_of_day or time(8, 0))
             scheduled_datetime = timezone.make_aware(scheduled_datetime, timezone.get_current_timezone())
         else:
             # Manually created — deadline = created_at + validity window
@@ -267,7 +291,10 @@ class ChecklistInstance(models.Model):
         if self.status not in ('completed', 'resubmitted') or not self.template:
             return None
 
-        supervisor_hours = self.template.supervisor_validity_window_hours
+        # Prefer snapshotted value; fall back to live template for legacy instances
+        supervisor_hours = self.supervisor_validity_window_hours
+        if supervisor_hours is None:
+            supervisor_hours = self.template.supervisor_validity_window_hours
 
         # 0 means unlimited - no deadline
         if supervisor_hours == 0:

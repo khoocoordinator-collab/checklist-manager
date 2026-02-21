@@ -91,7 +91,10 @@ class Command(BaseCommand):
                     date_label=date_label,
                     created_by='SYSTEM',
                     status='pending',
-                    supervisor_team=supervisor_team
+                    supervisor_team=supervisor_team,
+                    validity_window_hours=template.validity_window_hours,
+                    supervisor_validity_window_hours=template.supervisor_validity_window_hours,
+                    scheduled_time=scheduled_time,
                 )
 
                 for item in template.items.all():
