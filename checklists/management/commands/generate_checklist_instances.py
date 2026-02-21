@@ -73,7 +73,7 @@ class Command(BaseCommand):
                 supervisor_team = None
                 if template.requires_supervisor:
                     supervisor_team = Team.objects.filter(
-                        team_type='supervisor',
+                        supervisor_pin__gt='',
                         outlet=template.team.outlet
                     ).first()
                     if not supervisor_team:

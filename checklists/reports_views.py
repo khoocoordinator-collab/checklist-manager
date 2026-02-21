@@ -5,11 +5,11 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth import authenticate, login, logout
 from django.utils import timezone
-from django.db.models import Q, Count
+from django.db.models import Q, Count, Case, When, Value, IntegerField, Prefetch
 from django.db.models.functions import TruncDate
 from django.middleware.csrf import get_token
 from .models import (
-    Outlet, ChecklistInstance, InstanceItem, FlaggedItem, GroupOutletScope,
+    Outlet, ChecklistInstance, InstanceItem, FlaggedItem, GroupOutletScope, Team,
 )
 
 
@@ -115,12 +115,23 @@ def report_summary(request):
         flags_qs = flags_qs.filter(flagged_at__date__lte=date_to)
         instances_qs = instances_qs.filter(date_label__lte=date_to)
 
-    active_flags = flags_qs.filter(acknowledged_at__isnull=True).count()
-    total_flags = flags_qs.count()
-    expired_checklists = instances_qs.filter(status='expired').count()
-    open_reworks = instances_qs.filter(status='rejected').count()
-    total_completed = instances_qs.filter(status__in=['completed', 'verified']).count()
-    total_instances = instances_qs.count()
+    flag_counts = flags_qs.aggregate(
+        active_flags=Count('id', filter=Q(acknowledged_at__isnull=True)),
+        total_flags=Count('id'),
+    )
+    active_flags = flag_counts['active_flags']
+    total_flags = flag_counts['total_flags']
+
+    instance_counts = instances_qs.aggregate(
+        expired_checklists=Count('id', filter=Q(status='expired')),
+        open_reworks=Count('id', filter=Q(status='rejected')),
+        total_completed=Count('id', filter=Q(status__in=['completed', 'verified'])),
+        total_instances=Count('id'),
+    )
+    expired_checklists = instance_counts['expired_checklists']
+    open_reworks = instance_counts['open_reworks']
+    total_completed = instance_counts['total_completed']
+    total_instances = instance_counts['total_instances']
 
     # On-time completion rate, grouped by outlet or team
     # If a single outlet is selected, break down by team; otherwise by outlet
@@ -310,7 +321,13 @@ def report_open_reworks(request):
     qs = ChecklistInstance.objects.filter(
         team__outlet__in=outlets,
         status='rejected',
-    ).select_related('team__outlet', 'template').prefetch_related('items')
+    ).select_related('team__outlet', 'template').prefetch_related(
+        Prefetch(
+            'items',
+            queryset=InstanceItem.objects.filter(supervisor_confirmed=False),
+            to_attr='rejected_items_list'
+        )
+    )
 
     if date_from:
         qs = qs.filter(date_label__gte=date_from)
@@ -324,8 +341,7 @@ def report_open_reworks(request):
                 'item_text': item.item_text,
                 'supervisor_comment': item.supervisor_comment,
             }
-            for item in inst.items.all()
-            if item.supervisor_confirmed is False
+            for item in inst.rejected_items_list
         ]
         results.append({
             'id': str(inst.id),

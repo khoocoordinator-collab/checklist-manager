@@ -93,8 +93,8 @@ function SupervisorDashboard({ team, onLogout }) {
   const loadData = async () => {
     setLoading(true)
     try {
-      // Fetch awaiting verification
-      const response = await fetch(`${API_BASE}/api/pending/?team=${team.id}`)
+      // Fetch awaiting verification (pass role=supervisor so backend returns outlet-wide pending)
+      const response = await fetch(`${API_BASE}/api/pending/?team=${team.id}&role=supervisor`)
       if (response.ok) {
         const data = await response.json()
         setAwaitingVerification(data)

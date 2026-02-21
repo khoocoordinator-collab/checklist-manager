@@ -5,11 +5,13 @@ function Login({ onLogin }) {
   const [step, setStep] = useState(1)
   const [outlets, setOutlets] = useState([])
   const [selectedOutlet, setSelectedOutlet] = useState(null)
+  const [teams, setTeams] = useState([])
+  const [selectedTeam, setSelectedTeam] = useState(null)
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // Load outlets on mount, restore saved outlet
+  // Load outlets on mount, restore saved outlet + team
   useEffect(() => {
     fetchOutlets()
   }, [])
@@ -21,16 +23,35 @@ function Login({ onLogin }) {
       const data = await res.json()
       setOutlets(data)
 
-      // Restore saved outlet
-      const saved = localStorage.getItem('selected_outlet')
-      if (saved) {
+      // Restore saved outlet and team
+      const savedOutlet = localStorage.getItem('selected_outlet')
+      const savedTeam = localStorage.getItem('selected_team')
+      if (savedOutlet) {
         try {
-          const parsed = JSON.parse(saved)
-          const match = data.find(o => o.id === parsed.id)
-          if (match) {
-            setSelectedOutlet(match)
-            setStep(2)
-            return
+          const parsedOutlet = JSON.parse(savedOutlet)
+          const matchOutlet = data.find(o => o.id === parsedOutlet.id)
+          if (matchOutlet) {
+            setSelectedOutlet(matchOutlet)
+            // Fetch teams for this outlet
+            const teamsRes = await fetch(`${API_BASE}/api/outlets/${matchOutlet.id}/teams/`)
+            if (teamsRes.ok) {
+              const teamsData = await teamsRes.json()
+              setTeams(teamsData)
+
+              if (savedTeam) {
+                const parsedTeam = JSON.parse(savedTeam)
+                const matchTeam = teamsData.find(t => t.id === parsedTeam.id)
+                if (matchTeam) {
+                  setSelectedTeam(matchTeam)
+                  setStep(3) // Skip to PIN entry
+                  setLoading(false)
+                  return
+                }
+              }
+              setStep(2) // Skip to team selection
+              setLoading(false)
+              return
+            }
           }
         } catch {}
       }
@@ -41,12 +62,36 @@ function Login({ onLogin }) {
     }
   }
 
-  const selectOutlet = (outlet) => {
+  const selectOutlet = async (outlet) => {
     setSelectedOutlet(outlet)
     localStorage.setItem('selected_outlet', JSON.stringify({ id: outlet.id, name: outlet.name }))
-    setStep(2)
+    setSelectedTeam(null)
+    localStorage.removeItem('selected_team')
     setPin('')
     setError('')
+    setLoading(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/outlets/${outlet.id}/teams/`)
+      if (res.ok) {
+        const data = await res.json()
+        setTeams(data)
+        setStep(2)
+      } else {
+        setError('Failed to load teams')
+      }
+    } catch {
+      setError('Network error loading teams')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const selectTeam = (team) => {
+    setSelectedTeam(team)
+    localStorage.setItem('selected_team', JSON.stringify({ id: team.id, name: team.name }))
+    setPin('')
+    setError('')
+    setStep(3)
   }
 
   const handleLogin = async (e) => {
@@ -58,11 +103,15 @@ function Login({ onLogin }) {
       const res = await fetch(`${API_BASE}/api/login/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ outlet_id: selectedOutlet.id, passcode: pin })
+        body: JSON.stringify({
+          outlet_id: selectedOutlet.id,
+          team_id: selectedTeam.id,
+          pin: pin
+        })
       })
       const data = await res.json()
       if (data.success) {
-        onLogin(data.team)
+        onLogin(data.team, data.role)
       } else {
         setError(data.error || 'Invalid PIN')
       }
@@ -75,10 +124,21 @@ function Login({ onLogin }) {
 
   const changeOutlet = () => {
     setSelectedOutlet(null)
+    setSelectedTeam(null)
+    setTeams([])
     setPin('')
     setError('')
     localStorage.removeItem('selected_outlet')
+    localStorage.removeItem('selected_team')
     setStep(1)
+  }
+
+  const changeTeam = () => {
+    setSelectedTeam(null)
+    setPin('')
+    setError('')
+    localStorage.removeItem('selected_team')
+    setStep(2)
   }
 
   // Step 1: Select Outlet
@@ -112,13 +172,47 @@ function Login({ onLogin }) {
     )
   }
 
-  // Step 2: Enter PIN
+  // Step 2: Select Team
+  if (step === 2) {
+    return (
+      <div className="login-container">
+        <div className="login-card login-card-wide">
+          <div className="login-step-header">
+            <button className="login-change-link" onClick={changeOutlet}>Change</button>
+            <span className="login-outlet-label">{selectedOutlet.name}</span>
+          </div>
+          <h2>Select Team</h2>
+          {loading ? (
+            <div className="login-loading"><div className="loading-spinner" /></div>
+          ) : (
+            <div className="login-list">
+              {teams.map(team => (
+                <button
+                  key={team.id}
+                  className="login-option-btn"
+                  onClick={() => selectTeam(team)}
+                >
+                  <span className="login-option-name">{team.name}</span>
+                </button>
+              ))}
+              {teams.length === 0 && !loading && (
+                <p className="login-empty">No teams found for this outlet</p>
+              )}
+            </div>
+          )}
+          {error && <p className="error">{error}</p>}
+        </div>
+      </div>
+    )
+  }
+
+  // Step 3: Enter PIN
   return (
     <div className="login-container">
       <div className="login-card">
         <div className="login-step-header">
-          <button className="login-change-link" onClick={changeOutlet}>Change</button>
-          <span className="login-outlet-label">{selectedOutlet.name}</span>
+          <button className="login-change-link" onClick={changeTeam}>Change</button>
+          <span className="login-outlet-label">{selectedOutlet.name} — {selectedTeam.name}</span>
         </div>
         <h2>Enter PIN</h2>
         <form onSubmit={handleLogin}>

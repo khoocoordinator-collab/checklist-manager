@@ -86,7 +86,11 @@ class InstanceItemSerializer(serializers.ModelSerializer):
         return None
 
     def get_current_flag(self, obj):
-        flag = obj.flags.filter(resolved_at__isnull=True).first()
+        # Use prefetched active_flags if available (from optimized querysets)
+        if hasattr(obj, 'active_flags'):
+            flag = obj.active_flags[0] if obj.active_flags else None
+        else:
+            flag = obj.flags.filter(resolved_at__isnull=True).first()
         if flag:
             return FlaggedItemSerializer(flag, context=self.context).data
         return None
@@ -194,7 +198,7 @@ class TeamSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Team
-        fields = ['id', 'name', 'team_type', 'outlet', 'outlet_id', 'created_at']
+        fields = ['id', 'name', 'outlet', 'outlet_id', 'created_at']
 
 
 class SignatureSerializer(serializers.ModelSerializer):

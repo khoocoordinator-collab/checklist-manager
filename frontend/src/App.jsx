@@ -7,25 +7,32 @@ import './App.css'
 
 function App() {
   const [team, setTeam] = useState(null)
+  const [role, setRole] = useState(null)
   const [view, setView] = useState('dashboard')
   const [activeChecklist, setActiveChecklist] = useState(null)
   const [pendingCount, setPendingCount] = useState(0)
 
   useEffect(() => {
     const savedTeam = localStorage.getItem('team')
-    if (savedTeam) {
+    const savedRole = localStorage.getItem('role')
+    if (savedTeam && savedRole) {
       setTeam(JSON.parse(savedTeam))
+      setRole(savedRole)
     }
   }, [])
 
-  const handleLogin = (teamData) => {
+  const handleLogin = (teamData, loginRole) => {
     setTeam(teamData)
+    setRole(loginRole)
     localStorage.setItem('team', JSON.stringify(teamData))
+    localStorage.setItem('role', loginRole)
   }
 
   const handleLogout = () => {
     setTeam(null)
+    setRole(null)
     localStorage.removeItem('team')
+    localStorage.removeItem('role')
   }
 
   const openChecklist = (checklist) => {
@@ -38,11 +45,11 @@ function App() {
     setActiveChecklist(null)
   }
 
-  if (!team) {
+  if (!team || !role) {
     return <Login onLogin={handleLogin} />
   }
 
-  const isSupervisor = team.team_type === 'supervisor'
+  const isSupervisor = role === 'supervisor'
 
   return (
     <div className="app">
@@ -60,13 +67,13 @@ function App() {
         <SupervisorDashboard team={team} onLogout={handleLogout} />
       ) : (
         <>
-          <div style={{ display: view === 'dashboard' ? 'block' : 'none' }}>
+          {view === 'dashboard' && (
             <Dashboard
               team={team}
               onOpenChecklist={openChecklist}
               onPendingCountChange={setPendingCount}
             />
-          </div>
+          )}
 
           {view === 'checklist' && (
             <ChecklistForm

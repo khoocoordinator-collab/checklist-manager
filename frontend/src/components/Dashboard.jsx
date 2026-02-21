@@ -85,46 +85,37 @@ function Dashboard({ team, onOpenChecklist, onPendingCountChange }) {
     const localPending = JSON.parse(localStorage.getItem(`pending_${team.id}`) || '[]')
 
     try {
-      // Fetch server-side pending instances for this team
-      const pendingResponse = await fetch(`${API_BASE}/api/pending/?team=${team.id}`)
-      let serverPending = []
-      if (pendingResponse.ok) {
-        serverPending = await pendingResponse.json()
-      }
-
-      // Merge: local changes override server state (local is source of truth for edits)
-      const localIds = new Set(localPending.map(i => i.id))
-      const mergedPending = [
-        ...localPending,
-        ...serverPending.filter(i => !localIds.has(i.id))
-      ]
-      setPending(mergedPending)
-      onPendingCountChange(mergedPending.length)
-
-      // Fetch completed checklists for today (completed, verified, resubmitted)
+      // Fetch server-side pending + completed/verified/resubmitted in parallel
       const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
-      const [completedResponse, verifiedResponse, resubmittedResponse] = await Promise.all([
-        fetch(`${API_BASE}/api/instances/?team=${team.id}&status=completed`),
-        fetch(`${API_BASE}/api/instances/?team=${team.id}&status=verified`),
-        fetch(`${API_BASE}/api/instances/?team=${team.id}&status=resubmitted`)
+      const results = await Promise.allSettled([
+        fetch(`${API_BASE}/api/pending/?team=${team.id}`),
+        fetch(`${API_BASE}/api/instances/?team=${team.id}&status=completed,verified,resubmitted`)
       ])
 
-      let allCompletedToday = []
-      if (completedResponse.ok) {
-        const completedData = await completedResponse.json()
-        allCompletedToday = [...completedData.filter(instance => instance.date_label === today)]
+      // Handle pending response
+      const [pendingResult, completedResult] = results
+      if (pendingResult.status === 'fulfilled' && pendingResult.value.ok) {
+        const serverPending = await pendingResult.value.json()
+        const localIds = new Set(localPending.map(i => i.id))
+        const mergedPending = [
+          ...localPending,
+          ...serverPending.filter(i => !localIds.has(i.id))
+        ]
+        setPending(mergedPending)
+        onPendingCountChange(mergedPending.length)
+      } else {
+        setPending(localPending)
+        onPendingCountChange(localPending.length)
       }
-      if (verifiedResponse.ok) {
-        const verifiedData = await verifiedResponse.json()
-        allCompletedToday = [...allCompletedToday, ...verifiedData.filter(instance => instance.date_label === today)]
+
+      // Handle completed response
+      if (completedResult.status === 'fulfilled' && completedResult.value.ok) {
+        const allData = await completedResult.value.json()
+        const allCompletedToday = allData
+          .filter(instance => instance.date_label === today)
+          .sort((a, b) => new Date(b.synced_at || b.created_at) - new Date(a.synced_at || a.created_at))
+        setCompletedToday(allCompletedToday)
       }
-      if (resubmittedResponse.ok) {
-        const resubmittedData = await resubmittedResponse.json()
-        allCompletedToday = [...allCompletedToday, ...resubmittedData.filter(instance => instance.date_label === today)]
-      }
-      // Sort by synced_at descending (most recent first)
-      allCompletedToday.sort((a, b) => new Date(b.synced_at || b.created_at) - new Date(a.synced_at || a.created_at))
-      setCompletedToday(allCompletedToday)
     } catch (err) {
       console.log('Offline mode - using cached data')
       setPending(localPending)
@@ -156,8 +147,8 @@ function Dashboard({ team, onOpenChecklist, onPendingCountChange }) {
         setSyncMessage(`Synced ${data.synced} checklist(s)`)
         setSyncErrorDetails(null)
         setTimeout(() => setSyncMessage(''), 3000)
-        // Reload to fetch any remaining incomplete checklists from server
-        await loadData()
+        // Reload to fetch updated state from server
+        loadData()
       } else {
         const errorData = await response.json().catch(() => ({}))
         console.error('Sync error:', errorData)

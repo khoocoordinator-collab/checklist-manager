@@ -45,8 +45,8 @@ class OutletAdmin(admin.ModelAdmin):
 
 @admin.register(Team)
 class TeamAdmin(admin.ModelAdmin):
-    list_display = ['name', 'outlet', 'team_type', 'passcode', 'created_at']
-    list_filter = ['outlet', 'team_type']
+    list_display = ['name', 'outlet', 'staff_pin', 'supervisor_pin', 'created_at']
+    list_filter = ['outlet']
     search_fields = ['name', 'outlet__name']
 
 
@@ -169,7 +169,7 @@ class ChecklistTemplateAdmin(admin.ModelAdmin):
 
         # If supervisor is required, show form to select supervisor team
         if template.requires_supervisor:
-            supervisor_teams = Team.objects.filter(team_type='supervisor', outlet=template.team.outlet)
+            supervisor_teams = Team.objects.filter(supervisor_pin__gt='', outlet=template.team.outlet)
             if not supervisor_teams.exists():
                 messages.error(request, 'No supervisor teams available for this outlet. Please create a supervisor team first.')
                 return redirect('admin:checklists_checklisttemplate_change', template.id)
@@ -184,7 +184,7 @@ class ChecklistTemplateAdmin(admin.ModelAdmin):
                         'opts': self.model._meta,
                     })
                 try:
-                    supervisor_team = Team.objects.get(id=supervisor_team_id, team_type='supervisor')
+                    supervisor_team = Team.objects.get(id=supervisor_team_id, supervisor_pin__gt='')
                 except Team.DoesNotExist:
                     messages.error(request, 'Invalid supervisor team selected.')
                     return render(request, 'admin/checklists/select_supervisor.html', {

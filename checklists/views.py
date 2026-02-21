@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.utils import timezone
 from django.db import transaction
+from django.db.models import Prefetch
 from .models import Team, ChecklistTemplate, TemplateItem, Schedule, ChecklistInstance, InstanceItem, Signature, FlaggedItem
 from .serializers import (
     TeamSerializer, ChecklistTemplateSerializer, ChecklistTemplateCreateSerializer,
@@ -13,7 +14,9 @@ from .serializers import (
 
 
 class ChecklistTemplateViewSet(viewsets.ModelViewSet):
-    queryset = ChecklistTemplate.objects.filter(is_hidden=False)
+    queryset = ChecklistTemplate.objects.filter(is_hidden=False).select_related(
+        'team', 'schedule'
+    ).prefetch_related('items')
     permission_classes = [AllowAny]
 
     def get_serializer_class(self):
@@ -42,11 +45,25 @@ class ChecklistInstanceViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
 
     def get_queryset(self):
-        queryset = ChecklistInstance.objects.all()
+        queryset = ChecklistInstance.objects.select_related(
+            'template__schedule', 'team__outlet', 'supervisor_team'
+        ).prefetch_related(
+            'signature',
+            Prefetch(
+                'items',
+                queryset=InstanceItem.objects.prefetch_related(
+                    Prefetch(
+                        'flags',
+                        queryset=FlaggedItem.objects.filter(resolved_at__isnull=True),
+                        to_attr='active_flags'
+                    )
+                )
+            ),
+        )
 
         team_id = self.request.query_params.get('team')
         supervisor_team_id = self.request.query_params.get('supervisor_team')
-        status = self.request.query_params.get('status')
+        status_param = self.request.query_params.get('status')
 
         if team_id:
             queryset = queryset.filter(team_id=team_id)
@@ -54,8 +71,13 @@ class ChecklistInstanceViewSet(viewsets.ModelViewSet):
         if supervisor_team_id:
             queryset = queryset.filter(supervisor_team_id=supervisor_team_id)
 
-        if status:
-            queryset = queryset.filter(status=status)
+        if status_param:
+            # Support comma-separated statuses: ?status=completed,verified,resubmitted
+            statuses = [s.strip() for s in status_param.split(',') if s.strip()]
+            if len(statuses) == 1:
+                queryset = queryset.filter(status=statuses[0])
+            else:
+                queryset = queryset.filter(status__in=statuses)
 
         return queryset
 
@@ -108,7 +130,13 @@ class ChecklistInstanceViewSet(viewsets.ModelViewSet):
                     instance = serializer.save()
                     all_checked = True
 
-                    # Update/create items
+                    # Update/create items — bulk-fetch existing items first
+                    item_ids = [item_data.get('id') for item_data in items_data if item_data.get('id')]
+                    existing_items_map = {
+                        str(item.pk): item
+                        for item in InstanceItem.objects.filter(id__in=item_ids)
+                    } if item_ids else {}
+
                     for item_data in items_data:
                         item_id = item_data.get('id')
                         item_data['instance'] = instance.id
@@ -120,10 +148,10 @@ class ChecklistInstanceViewSet(viewsets.ModelViewSet):
                         if not item_data.get('is_checked'):
                             all_checked = False
 
-                        try:
-                            existing_item = InstanceItem.objects.get(id=item_id)
+                        existing_item = existing_items_map.get(str(item_id)) if item_id else None
+                        if existing_item:
                             item_serializer = InstanceItemSerializer(existing_item, data=item_data, partial=True)
-                        except InstanceItem.DoesNotExist:
+                        else:
                             item_serializer = InstanceItemSerializer(data=item_data)
 
                         if item_serializer.is_valid():
@@ -195,7 +223,7 @@ def list_outlets(request):
 @permission_classes([AllowAny])
 def list_outlet_teams(request, outlet_id):
     teams = Team.objects.filter(outlet_id=outlet_id).order_by('name')
-    data = [{'id': str(t.id), 'name': t.name, 'team_type': t.team_type} for t in teams]
+    data = [{'id': str(t.id), 'name': t.name} for t in teams]
     return Response(data)
 
 
@@ -204,25 +232,39 @@ def list_outlet_teams(request, outlet_id):
 @permission_classes([AllowAny])
 def team_login(request):
     outlet_id = request.data.get('outlet_id')
-    passcode = request.data.get('passcode')
+    team_id = request.data.get('team_id')
+    pin = request.data.get('pin')
 
-    if not outlet_id or not passcode:
+    if not outlet_id or not team_id or not pin:
         return Response({
             'success': False,
-            'error': 'Outlet and PIN are required'
+            'error': 'Outlet, team, and PIN are required'
         }, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        team = Team.objects.get(outlet_id=outlet_id, passcode=passcode)
-        return Response({
-            'success': True,
-            'team': TeamSerializer(team).data
-        })
+        team = Team.objects.select_related('outlet').get(id=team_id, outlet_id=outlet_id)
     except Team.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': 'Team not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    # Determine role from PIN match
+    if team.staff_pin and pin == team.staff_pin:
+        role = 'staff'
+    elif team.supervisor_pin and pin == team.supervisor_pin:
+        role = 'supervisor'
+    else:
         return Response({
             'success': False,
             'error': 'Invalid PIN'
         }, status=status.HTTP_401_UNAUTHORIZED)
+
+    return Response({
+        'success': True,
+        'team': TeamSerializer(team).data,
+        'role': role
+    })
 
 
 @api_view(['GET'])
@@ -238,14 +280,30 @@ def pending_checklists(request):
     except Team.DoesNotExist:
         return Response({'error': 'Team not found'}, status=status.HTTP_404_NOT_FOUND)
 
-    # For supervisor teams, return completed/resubmitted checklists awaiting verification
-    # scoped to the same outlet as the supervisor team
-    if team.team_type == 'supervisor':
+    instance_prefetch = Prefetch(
+        'items',
+        queryset=InstanceItem.objects.prefetch_related(
+            Prefetch(
+                'flags',
+                queryset=FlaggedItem.objects.filter(resolved_at__isnull=True),
+                to_attr='active_flags'
+            )
+        )
+    )
+
+    # Check role from query param (set by client based on login PIN)
+    role = request.query_params.get('role', 'staff')
+
+    # For supervisor role, return completed/resubmitted checklists awaiting verification
+    # scoped to the same outlet as the team
+    if role == 'supervisor':
         awaiting = ChecklistInstance.objects.filter(
             status__in=['completed', 'resubmitted'],
             supervisor_signed_off=False,
             team__outlet=team.outlet
-        ).select_related('team', 'template')
+        ).select_related(
+            'template__schedule', 'team__outlet', 'supervisor_team'
+        ).prefetch_related('signature', instance_prefetch)
         serializer = ChecklistInstanceSerializer(awaiting, many=True, context={'request': request})
         return Response(serializer.data)
 
@@ -253,7 +311,9 @@ def pending_checklists(request):
     pending = ChecklistInstance.objects.filter(
         team_id=team_id,
         status__in=['draft', 'pending', 'rejected']
-    )
+    ).select_related(
+        'template__schedule', 'team__outlet', 'supervisor_team'
+    ).prefetch_related('signature', instance_prefetch)
     serializer = ChecklistInstanceSerializer(pending, many=True, context={'request': request})
     return Response(serializer.data)
 
@@ -350,9 +410,12 @@ def supervisor_verify(request):
         return Response({'error': 'Checklist already verified by supervisor'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        supervisor_team = Team.objects.get(id=supervisor_team_id, team_type='supervisor')
+        supervisor_team = Team.objects.get(id=supervisor_team_id)
     except Team.DoesNotExist:
         return Response({'error': 'Supervisor team not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if not supervisor_team.supervisor_pin:
+        return Response({'error': 'Team does not have supervisor privileges'}, status=status.HTTP_403_FORBIDDEN)
 
     # Update instance with supervisor verification
     instance.supervisor_team = supervisor_team
@@ -412,9 +475,12 @@ def supervisor_review(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        supervisor_team = Team.objects.get(id=supervisor_team_id, team_type='supervisor')
+        supervisor_team = Team.objects.get(id=supervisor_team_id)
     except (Team.DoesNotExist, Exception):
         return Response({'error': 'Supervisor team not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if not supervisor_team.supervisor_pin:
+        return Response({'error': 'Team does not have supervisor privileges'}, status=status.HTTP_403_FORBIDDEN)
 
     if not items_data:
         return Response({'error': 'No items provided'}, status=status.HTTP_400_BAD_REQUEST)
@@ -427,24 +493,33 @@ def supervisor_review(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-    # Process each item decision
+    # Process item decisions in bulk
+    item_ids = [d.get('item_id') for d in items_data]
+    existing_items = {
+        str(item.pk): item
+        for item in InstanceItem.objects.filter(id__in=item_ids, instance=instance)
+    }
+
+    # Verify all items exist
+    for item_id in item_ids:
+        if str(item_id) not in existing_items:
+            return Response({'error': f'Item {item_id} not found'}, status=status.HTTP_404_NOT_FOUND)
+
     any_rejected = False
+    items_to_update = []
     for item_decision in items_data:
-        item_id = item_decision.get('item_id')
+        item = existing_items[str(item_decision.get('item_id'))]
         confirmed = item_decision.get('supervisor_confirmed')
         comment = item_decision.get('supervisor_comment', '')
 
-        try:
-            item = InstanceItem.objects.get(id=item_id, instance=instance)
-        except InstanceItem.DoesNotExist:
-            return Response({'error': f'Item {item_id} not found'}, status=status.HTTP_404_NOT_FOUND)
-
         item.supervisor_confirmed = confirmed
         item.supervisor_comment = comment
-        item.save(update_fields=['supervisor_confirmed', 'supervisor_comment'])
+        items_to_update.append(item)
 
         if not confirmed:
             any_rejected = True
+
+    InstanceItem.objects.bulk_update(items_to_update, ['supervisor_confirmed', 'supervisor_comment'])
 
     # Update instance based on review outcome
     instance.supervisor_team = supervisor_team
@@ -509,9 +584,12 @@ def supervisor_rework(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        supervisor_team = Team.objects.get(id=supervisor_team_id, team_type='supervisor')
+        supervisor_team = Team.objects.get(id=supervisor_team_id)
     except (Team.DoesNotExist, Exception):
         return Response({'error': 'Supervisor team not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if not supervisor_team.supervisor_pin:
+        return Response({'error': 'Team does not have supervisor privileges'}, status=status.HTTP_403_FORBIDDEN)
 
     if not items_data:
         return Response({'error': 'No items provided'}, status=status.HTTP_400_BAD_REQUEST)
@@ -524,20 +602,25 @@ def supervisor_rework(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-    # Save item decisions
-    for item_decision in items_data:
-        item_id = item_decision.get('item_id')
-        confirmed = item_decision.get('supervisor_confirmed')
-        comment = item_decision.get('supervisor_comment', '')
+    # Save item decisions in bulk
+    item_ids = [d.get('item_id') for d in items_data]
+    existing_items = {
+        str(item.pk): item
+        for item in InstanceItem.objects.filter(id__in=item_ids, instance=instance)
+    }
 
-        try:
-            item = InstanceItem.objects.get(id=item_id, instance=instance)
-        except (InstanceItem.DoesNotExist, Exception):
+    for item_id in item_ids:
+        if str(item_id) not in existing_items:
             return Response({'error': f'Item {item_id} not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        item.supervisor_confirmed = confirmed
-        item.supervisor_comment = comment
-        item.save(update_fields=['supervisor_confirmed', 'supervisor_comment'])
+    items_to_update = []
+    for item_decision in items_data:
+        item = existing_items[str(item_decision.get('item_id'))]
+        item.supervisor_confirmed = item_decision.get('supervisor_confirmed')
+        item.supervisor_comment = item_decision.get('supervisor_comment', '')
+        items_to_update.append(item)
+
+    InstanceItem.objects.bulk_update(items_to_update, ['supervisor_confirmed', 'supervisor_comment'])
 
     # Reject and return to staff queue
     instance.supervisor_team = supervisor_team

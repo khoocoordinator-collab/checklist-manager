@@ -17,24 +17,15 @@ class Outlet(models.Model):
 
 
 class Team(models.Model):
-    TEAM_TYPE_CHOICES = [
-        ('staff', 'Staff'),
-        ('supervisor', 'Supervisor'),
-    ]
-
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     outlet = models.ForeignKey(Outlet, on_delete=models.CASCADE, related_name='teams', null=True)
     name = models.CharField(max_length=100)
-    passcode = models.CharField(max_length=4)
-    team_type = models.CharField(max_length=10, choices=TEAM_TYPE_CHOICES, default='staff')
+    staff_pin = models.CharField(max_length=4, blank=True, default='')
+    supervisor_pin = models.CharField(max_length=4, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
-        unique_together = ('outlet', 'passcode')
-
     def __str__(self):
-        type_label = '👤' if self.team_type == 'staff' else '👑'
-        return f"{type_label} {self.outlet.name} - {self.name}"
+        return f"{self.outlet.name} - {self.name}"
 
 
 class Schedule(models.Model):
@@ -191,12 +182,12 @@ class ChecklistInstance(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     template = models.ForeignKey(ChecklistTemplate, null=True, blank=True, on_delete=models.SET_NULL)
     team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name='checklist_instances')
-    date_label = models.CharField(max_length=50)
+    date_label = models.CharField(max_length=50, db_index=True)
     created_by = models.CharField(max_length=6)
     completed_by = models.CharField(max_length=100, blank=True, help_text="Name of person who completed this checklist")
     created_at = models.DateTimeField(auto_now_add=True)
     synced_at = models.DateTimeField(null=True, blank=True)
-    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='pending', db_index=True)
 
     # Snapshotted at instance creation so template changes don't retroactively affect deadlines
     validity_window_hours = models.IntegerField(
@@ -214,8 +205,7 @@ class ChecklistInstance(models.Model):
 
     # Supervisor verification fields
     supervisor_team = models.ForeignKey(Team, on_delete=models.SET_NULL, null=True, blank=True,
-                                       related_name='verified_checklists',
-                                       limit_choices_to={'team_type': 'supervisor'})
+                                       related_name='verified_checklists')
     supervisor_signed_off = models.BooleanField(default=False)
     supervisor_signature = models.TextField(blank=True, help_text="Base64 encoded PNG supervisor signature")
     supervisor_name = models.CharField(max_length=100, blank=True)
@@ -380,8 +370,8 @@ class FlaggedItem(models.Model):
     photo = models.ImageField(upload_to=flag_photo_upload_path, null=True, blank=True)
     photo_uploaded_at = models.DateTimeField(null=True, blank=True)
     flagged_at = models.DateTimeField(default=timezone.now)
-    resolved_at = models.DateTimeField(null=True, blank=True)
-    acknowledged_at = models.DateTimeField(null=True, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    acknowledged_at = models.DateTimeField(null=True, blank=True, db_index=True)
     acknowledged_by = models.CharField(max_length=100, blank=True)
     acknowledgement_signature = models.TextField(blank=True)
 
