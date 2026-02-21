@@ -180,13 +180,40 @@ class ChecklistInstanceViewSet(viewsets.ModelViewSet):
         })
 
 
+@api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def list_outlets(request):
+    from .models import Outlet
+    outlets = Outlet.objects.all().order_by('name')
+    from .serializers import OutletSerializer
+    return Response(OutletSerializer(outlets, many=True).data)
+
+
+@api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def list_outlet_teams(request, outlet_id):
+    teams = Team.objects.filter(outlet_id=outlet_id).order_by('name')
+    data = [{'id': str(t.id), 'name': t.name, 'team_type': t.team_type} for t in teams]
+    return Response(data)
+
+
 @api_view(['POST'])
 @authentication_classes([])
 @permission_classes([AllowAny])
 def team_login(request):
+    outlet_id = request.data.get('outlet_id')
     passcode = request.data.get('passcode')
+
+    if not outlet_id or not passcode:
+        return Response({
+            'success': False,
+            'error': 'Outlet and PIN are required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
     try:
-        team = Team.objects.get(passcode=passcode)
+        team = Team.objects.get(outlet_id=outlet_id, passcode=passcode)
         return Response({
             'success': True,
             'team': TeamSerializer(team).data
@@ -194,7 +221,7 @@ def team_login(request):
     except Team.DoesNotExist:
         return Response({
             'success': False,
-            'error': 'Invalid passcode'
+            'error': 'Invalid PIN'
         }, status=status.HTTP_401_UNAUTHORIZED)
 
 

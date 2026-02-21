@@ -25,9 +25,12 @@ class Team(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     outlet = models.ForeignKey(Outlet, on_delete=models.CASCADE, related_name='teams', null=True)
     name = models.CharField(max_length=100)
-    passcode = models.CharField(max_length=6, unique=True)
+    passcode = models.CharField(max_length=4)
     team_type = models.CharField(max_length=10, choices=TEAM_TYPE_CHOICES, default='staff')
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('outlet', 'passcode')
 
     def __str__(self):
         type_label = '👤' if self.team_type == 'staff' else '👑'

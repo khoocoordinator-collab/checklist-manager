@@ -11,6 +11,8 @@ router.register(r'signatures', views.SignatureViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('outlets/', views.list_outlets, name='list_outlets'),
+    path('outlets/<uuid:outlet_id>/teams/', views.list_outlet_teams, name='list_outlet_teams'),
     path('login/', views.team_login, name='team_login'),
     path('pending/', views.pending_checklists, name='pending_checklists'),
     path('upload-photo/', views.upload_photo, name='upload_photo'),

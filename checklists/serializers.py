@@ -194,7 +194,7 @@ class TeamSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Team
-        fields = ['id', 'name', 'passcode', 'team_type', 'outlet', 'outlet_id', 'created_at']
+        fields = ['id', 'name', 'team_type', 'outlet', 'outlet_id', 'created_at']
 
 
 class SignatureSerializer(serializers.ModelSerializer):
