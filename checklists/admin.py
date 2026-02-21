@@ -1,15 +1,22 @@
+import json
+import logging
+
 from django.contrib import admin
-from django.db import models
+from django.conf import settings
+from django.db import models, transaction
 from django.utils import timezone
 from django.utils.html import format_html
 from django.urls import path, reverse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib import messages
+from django import forms
 from django.forms import Textarea, ModelForm, ValidationError, ChoiceField
 from django.contrib.auth.admin import GroupAdmin as BaseGroupAdmin
 from django.contrib.auth.models import Group
 from urllib.parse import urlencode
 from .models import Outlet, Team, ChecklistTemplate, TemplateItem, Schedule, ChecklistInstance, InstanceItem, Signature, FlaggedItem, GroupOutletScope, LibraryTemplate, LibraryTask
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -53,6 +60,35 @@ class TeamAdmin(admin.ModelAdmin):
 
 # ─── Checklist Library ────────────────────────────────────────────────────────
 
+VALID_TASK_TYPES = {'yes_no', 'number', 'text', 'photo'}
+
+
+class AIChecklistForm(forms.Form):
+    checklist_name = forms.CharField(
+        max_length=200,
+        label='Checklist Name',
+    )
+    suggested_department = forms.CharField(
+        max_length=100,
+        required=False,
+        label='Suggested Department',
+        help_text="Advisory tag, e.g. 'Kitchen', 'Bar', 'Floor'",
+    )
+    description = forms.CharField(
+        widget=forms.Textarea(attrs={'rows': 4, 'placeholder': 'e.g. Daily kitchen opening procedures including equipment checks, temperature logs, and hygiene verification'}),
+        min_length=30,
+        label='Description',
+        help_text='Describe what this checklist is for (minimum 30 characters).',
+    )
+    num_tasks = forms.IntegerField(
+        min_value=1,
+        max_value=30,
+        initial=5,
+        label='Number of Tasks',
+        help_text='How many tasks to generate (1-30).',
+    )
+
+
 class LibraryTaskInline(admin.TabularInline):
     model = LibraryTask
     extra = 1
@@ -67,6 +103,116 @@ class LibraryTemplateAdmin(admin.ModelAdmin):
     fields = ['name', 'suggested_for']
     inlines = [LibraryTaskInline]
     actions = ['create_checklist_from_selected']
+    change_list_template = 'admin/checklists/librarytemplate/change_list.html'
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                'ai-generate/',
+                self.admin_site.admin_view(self.ai_generate_view),
+                name='librarytemplate-ai-generate',
+            ),
+        ]
+        return custom_urls + urls
+
+    def ai_generate_view(self, request):
+        if request.method == 'POST':
+            form = AIChecklistForm(request.POST)
+            if form.is_valid():
+                checklist_name = form.cleaned_data['checklist_name']
+                department = form.cleaned_data['suggested_department']
+                description = form.cleaned_data['description']
+                num_tasks = form.cleaned_data['num_tasks']
+
+                if not settings.ANTHROPIC_API_KEY:
+                    messages.error(request, 'ANTHROPIC_API_KEY is not configured. Set it in your environment variables.')
+                    return render(request, 'admin/checklists/librarytemplate/ai_generate.html', {
+                        'form': form,
+                        'opts': self.model._meta,
+                        'has_view_permission': True,
+                    })
+
+                try:
+                    import anthropic
+                    client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+                    message = client.messages.create(
+                        model='claude-sonnet-4-20250514',
+                        max_tokens=1024,
+                        system=(
+                            'You are generating checklist tasks for a restaurant compliance system. '
+                            'Every task must have a name (max 48 characters) and a type. '
+                            'The type must be strictly one of these four values only: yes_no, photo, number, or text. '
+                            'No other values are permitted. '
+                            'Respond with valid JSON in the format {"tasks": [{"task_name": "...", "task_type": "..."}]} '
+                            'with no extra text or explanation.'
+                        ),
+                        messages=[{
+                            'role': 'user',
+                            'content': f'Generate {num_tasks} checklist tasks for: {description}',
+                        }],
+                    )
+
+                    raw_text = message.content[0].text.strip()
+                    # Strip markdown code fences if present
+                    if raw_text.startswith('```'):
+                        raw_text = raw_text.split('\n', 1)[1]  # remove opening ```json
+                        raw_text = raw_text.rsplit('```', 1)[0]  # remove closing ```
+                    result = json.loads(raw_text)
+                    tasks = result.get('tasks', [])
+
+                    if not tasks:
+                        messages.error(request, 'AI returned no tasks. Please try again with a more detailed description.')
+                        return render(request, 'admin/checklists/librarytemplate/ai_generate.html', {
+                            'form': form,
+                            'opts': self.model._meta,
+                            'has_view_permission': True,
+                        })
+
+                    with transaction.atomic():
+                        template = LibraryTemplate.objects.create(
+                            name=checklist_name,
+                            suggested_for=department,
+                        )
+                        for i, task in enumerate(tasks):
+                            task_type = task.get('task_type', 'yes_no')
+                            if task_type not in VALID_TASK_TYPES:
+                                task_type = 'yes_no'
+                            LibraryTask.objects.create(
+                                library_template=template,
+                                task_name=task.get('task_name', f'Task {i + 1}')[:48],
+                                task_type=task_type,
+                                order=i,
+                            )
+
+                    messages.success(
+                        request,
+                        f'Created "{checklist_name}" with {len(tasks)} AI-generated tasks.',
+                    )
+                    return redirect(
+                        reverse('admin:checklists_librarytemplate_change', args=[template.pk])
+                    )
+
+                except json.JSONDecodeError:
+                    logger.exception('Failed to parse AI response as JSON')
+                    messages.error(request, 'AI returned invalid JSON. Please try again.')
+                except Exception as e:
+                    logger.exception('AI checklist generation failed')
+                    messages.error(request, f'AI generation failed: {e}')
+
+                return render(request, 'admin/checklists/librarytemplate/ai_generate.html', {
+                    'form': form,
+                    'opts': self.model._meta,
+                    'has_view_permission': True,
+                })
+        else:
+            form = AIChecklistForm()
+
+        return render(request, 'admin/checklists/librarytemplate/ai_generate.html', {
+            'form': form,
+            'opts': self.model._meta,
+            'has_view_permission': True,
+        })
 
     def task_count(self, obj):
         return obj.tasks.count()

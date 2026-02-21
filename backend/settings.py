@@ -179,6 +179,9 @@ AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
 AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME', 'checklist-manager-archives-sg')
 AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME', 'ap-southeast-1')
 AWS_DEFAULT_ACL = 'private'
+
+# Anthropic API key for AI checklist generation
+ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 AWS_S3_SIGNATURE_VERSION = 's3v4'
 
 # Use S3 for media files in production if credentials are set

@@ -1,0 +1,10 @@
+{% extends "admin/change_list.html" %}
+
+{% block object-tools-items %}
+  <li>
+    <a href="ai-generate/" style="background: #7c3aed; color: white; padding: 6px 12px; border-radius: 4px; text-decoration: none; font-weight: bold;">
+      AI Checklist Generator
+    </a>
+  </li>
+  {{ block.super }}
+{% endblock %}

@@ -1,0 +1,112 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}AI Checklist Generator{% endblock %}
+
+{% block breadcrumbs %}
+  <div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'admin:checklists_librarytemplate_changelist' %}">Library templates</a>
+    &rsaquo; AI Checklist Generator
+  </div>
+{% endblock %}
+
+{% block content %}
+<style>
+  .ai-form-container {
+    max-width: 600px;
+    margin: 20px 0;
+  }
+  .ai-form-container .form-row {
+    margin-bottom: 16px;
+  }
+  .ai-form-container label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 4px;
+    color: #333;
+  }
+  .ai-form-container input[type="text"],
+  .ai-form-container input[type="number"],
+  .ai-form-container textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    box-sizing: border-box;
+  }
+  .ai-form-container textarea {
+    min-height: 100px;
+    resize: vertical;
+  }
+  .ai-form-container .help {
+    font-size: 12px;
+    color: #666;
+    margin-top: 4px;
+  }
+  .ai-form-container .errorlist {
+    color: #ba2121;
+    margin: 4px 0;
+    padding: 0;
+    list-style: none;
+  }
+  .ai-form-container .submit-row {
+    margin-top: 24px;
+  }
+  .ai-form-container .submit-row input[type="submit"] {
+    background: #7c3aed;
+    color: white;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  .ai-form-container .submit-row input[type="submit"]:hover {
+    background: #6d28d9;
+  }
+  .ai-generate-spinner {
+    display: none;
+    margin-left: 12px;
+    vertical-align: middle;
+    color: #666;
+  }
+</style>
+
+<div class="ai-form-container">
+  <h2>Generate a checklist using AI</h2>
+  <p style="color: #666; margin-bottom: 20px;">
+    Describe what the checklist is for and Claude will generate the tasks automatically.
+  </p>
+
+  <form method="post" id="ai-generate-form">
+    {% csrf_token %}
+
+    {% for field in form %}
+    <div class="form-row{% if field.errors %} errors{% endif %}">
+      <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+      {{ field.errors }}
+      {{ field }}
+      {% if field.help_text %}
+        <p class="help">{{ field.help_text }}</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+
+    <div class="submit-row">
+      <input type="submit" value="Generate Checklist" id="ai-submit-btn">
+      <span class="ai-generate-spinner" id="ai-spinner">Generating tasks... this may take a few seconds.</span>
+    </div>
+  </form>
+</div>
+
+<script>
+document.getElementById('ai-generate-form').addEventListener('submit', function() {
+  document.getElementById('ai-submit-btn').disabled = true;
+  document.getElementById('ai-submit-btn').value = 'Generating...';
+  document.getElementById('ai-spinner').style.display = 'inline';
+});
+</script>
+{% endblock %}
