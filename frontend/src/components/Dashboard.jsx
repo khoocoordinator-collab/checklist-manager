@@ -176,10 +176,10 @@ function Dashboard({ team, onOpenChecklist, onPendingCountChange }) {
       )}
 
       {syncErrorDetails && (
-        <div className="sync-error-details" style={{background: '#fee', border: '1px solid #fcc', padding: '10px', marginBottom: '10px', borderRadius: '4px', fontSize: '12px'}}>
+        <div className="sync-error-details" style={{background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', padding: '10px', marginBottom: '10px', borderRadius: '6px', fontSize: '12px', color: '#f87171'}}>
           <strong>Debug Info:</strong>
-          <pre style={{overflow: 'auto', maxHeight: '200px', marginTop: '5px'}}>{JSON.stringify(syncErrorDetails, null, 2)}</pre>
-          <button onClick={() => setSyncErrorDetails(null)} style={{marginTop: '5px', fontSize: '11px'}}>Hide</button>
+          <pre style={{overflow: 'auto', maxHeight: '200px', marginTop: '5px', color: '#94a3b8'}}>{JSON.stringify(syncErrorDetails, null, 2)}</pre>
+          <button onClick={() => setSyncErrorDetails(null)} style={{marginTop: '5px', fontSize: '11px', color: '#94a3b8', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer'}}>Hide</button>
         </div>
       )}
 

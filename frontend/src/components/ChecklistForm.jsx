@@ -587,11 +587,11 @@ const activeFlagItemData = items.find(i => i.id === activeFlagItem)
               <div style={{
                 margin: '6px 0 2px',
                 padding: '6px 10px',
-                background: '#fef2f2',
-                border: '1px solid #fecaca',
-                borderRadius: '4px',
+                background: 'rgba(239,68,68,0.1)',
+                border: '1px solid rgba(239,68,68,0.25)',
+                borderRadius: '6px',
                 fontSize: '12px',
-                color: '#ef4444'
+                color: '#f87171'
               }}>
                 ⚠ Supervisor: {item.supervisor_comment}
               </div>
@@ -605,14 +605,14 @@ const activeFlagItemData = items.find(i => i.id === activeFlagItem)
         <div className="modal-overlay" onClick={closeFlagPopup}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <h3>🚩 Flag Item</h3>
-            <p style={{ fontSize: '13px', color: '#666', marginBottom: '12px' }}>{activeFlagItemData.item_text}</p>
+            <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '12px' }}>{activeFlagItemData.item_text}</p>
             <textarea
               value={flagDescription}
               onChange={(e) => setFlagDescription(e.target.value)}
               placeholder="Describe the issue..."
               autoFocus
               readOnly={isReadOnly}
-              style={isReadOnly ? { background: '#f5f5f5', color: '#555' } : {}}
+              style={isReadOnly ? { background: '#0d1320', color: '#94a3b8' } : {}}
             />
 
             {/* Flag photo section */}
@@ -661,7 +661,7 @@ const activeFlagItemData = items.find(i => i.id === activeFlagItem)
             </div>
 
             {isReadOnly && activeFlagItemData.current_flag?.status === 'acknowledged' && (
-              <div style={{ marginTop: '10px', padding: '8px 10px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', fontSize: '12px', color: '#16a34a' }}>
+              <div style={{ marginTop: '10px', padding: '8px 10px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: '6px', fontSize: '12px', color: '#4ade80' }}>
                 Acknowledged by <strong>{activeFlagItemData.current_flag.acknowledged_by}</strong>
                 {activeFlagItemData.current_flag.acknowledged_at && (
                   <span> on {new Date(activeFlagItemData.current_flag.acknowledged_at).toLocaleString()}</span>
@@ -689,7 +689,7 @@ const activeFlagItemData = items.find(i => i.id === activeFlagItem)
       {allComplete && !isReadOnly && (
         <div className="signature-section">
           <h3>✍️ Sign Off</h3>
-          <p style={{ fontSize: '13px', color: '#666', margin: '0 0 12px 0' }}>
+          <p style={{ fontSize: '13px', color: '#94a3b8', margin: '0 0 12px 0' }}>
             All items complete. Please sign to confirm completion.
           </p>
 

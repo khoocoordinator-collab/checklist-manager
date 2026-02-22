@@ -16,9 +16,9 @@ function SignaturePad({ onSave, onCancel, defaultSignature = null, signedBy = ''
     canvas.height = rect.height * 2
     const ctx = canvas.getContext('2d')
     ctx.scale(2, 2)
-    
-    // Set up drawing style
-    ctx.strokeStyle = '#000'
+
+    // Set up drawing style - white ink on dark canvas
+    ctx.strokeStyle = '#f0f4f8'
     ctx.lineWidth = 2
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
@@ -50,7 +50,7 @@ function SignaturePad({ onSave, onCancel, defaultSignature = null, signedBy = ''
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
     const pos = getPos(e)
-    
+
     ctx.beginPath()
     ctx.moveTo(pos.x, pos.y)
     setIsDrawing(true)
@@ -60,11 +60,11 @@ function SignaturePad({ onSave, onCancel, defaultSignature = null, signedBy = ''
   const draw = (e) => {
     e.preventDefault()
     if (!isDrawing) return
-    
+
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
     const pos = getPos(e)
-    
+
     ctx.lineTo(pos.x, pos.y)
     ctx.stroke()
   }
@@ -83,7 +83,7 @@ function SignaturePad({ onSave, onCancel, defaultSignature = null, signedBy = ''
 
   const handleSave = () => {
     if (!hasDrawing || !signatureName.trim()) return
-    
+
     const canvas = canvasRef.current
     const imageData = canvas.toDataURL('image/png')
     onSave({
@@ -94,24 +94,26 @@ function SignaturePad({ onSave, onCancel, defaultSignature = null, signedBy = ''
 
   return (
     <div style={{
-      background: 'white',
+      background: '#1a2235',
       padding: '24px',
-      borderRadius: '12px',
+      borderRadius: '16px',
       minWidth: '340px',
-      maxWidth: '90vw'
+      maxWidth: '90vw',
+      border: '1px solid rgba(255,255,255,0.1)',
+      boxShadow: '0 8px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1)'
     }}>
-      <h3 style={{ margin: '0 0 16px 0', color: '#2c3e50' }}>
-        ✍️ {title}
+      <h3 style={{ margin: '0 0 16px 0', color: '#f0f4f8', letterSpacing: '-0.025em' }}>
+        {title}
       </h3>
-      
-      <p style={{ margin: '0 0 12px 0', color: '#666', fontSize: '0.9rem' }}>
+
+      <p style={{ margin: '0 0 12px 0', color: '#94a3b8', fontSize: '13px' }}>
         Please sign below with your finger or mouse
       </p>
 
       <div style={{
-        border: '2px solid #ddd',
+        border: '2px solid rgba(255,255,255,0.1)',
         borderRadius: '8px',
-        background: '#f8f9fa',
+        background: '#0d1320',
         touchAction: 'none',
         cursor: 'crosshair'
       }}>
@@ -134,7 +136,7 @@ function SignaturePad({ onSave, onCancel, defaultSignature = null, signedBy = ''
       </div>
 
       <div style={{ marginTop: '16px' }}>
-        <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', color: '#2c3e50', fontSize: '0.9rem' }}>
+        <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', color: '#f0f4f8', fontSize: '13px' }}>
           Your Name:
         </label>
         <input
@@ -145,17 +147,19 @@ function SignaturePad({ onSave, onCancel, defaultSignature = null, signedBy = ''
           style={{
             width: '100%',
             padding: '10px 12px',
-            border: '2px solid #ddd',
+            border: '1px solid rgba(255,255,255,0.1)',
             borderRadius: '6px',
-            fontSize: '1rem',
-            boxSizing: 'border-box'
+            fontSize: '14px',
+            boxSizing: 'border-box',
+            background: '#0d1320',
+            color: '#f0f4f8'
           }}
         />
       </div>
 
-      <div style={{ 
-        display: 'flex', 
-        gap: '10px', 
+      <div style={{
+        display: 'flex',
+        gap: '10px',
         marginTop: '20px',
         justifyContent: 'flex-end'
       }}>
@@ -164,13 +168,13 @@ function SignaturePad({ onSave, onCancel, defaultSignature = null, signedBy = ''
           disabled={!hasDrawing}
           style={{
             padding: '10px 16px',
-            border: '1px solid #ddd',
+            border: '1px solid rgba(255,255,255,0.1)',
             borderRadius: '6px',
-            background: '#f8f9fa',
-            color: '#333',
+            background: '#1a2235',
+            color: '#94a3b8',
             cursor: hasDrawing ? 'pointer' : 'not-allowed',
             opacity: hasDrawing ? 1 : 0.5,
-            fontSize: '0.9rem'
+            fontSize: '13px'
           }}
         >
           Clear
@@ -179,12 +183,12 @@ function SignaturePad({ onSave, onCancel, defaultSignature = null, signedBy = ''
           onClick={onCancel}
           style={{
             padding: '10px 16px',
-            border: '1px solid #ccc',
+            border: '1px solid rgba(255,255,255,0.1)',
             borderRadius: '6px',
-            background: 'white',
-            color: '#333',
+            background: '#1a2235',
+            color: '#94a3b8',
             cursor: 'pointer',
-            fontSize: '0.9rem'
+            fontSize: '13px'
           }}
         >
           Cancel
@@ -196,11 +200,13 @@ function SignaturePad({ onSave, onCancel, defaultSignature = null, signedBy = ''
             padding: '10px 20px',
             border: 'none',
             borderRadius: '6px',
-            background: hasDrawing && signatureName.trim() ? '#27ae60' : '#ccc',
-            color: 'white',
+            background: hasDrawing && signatureName.trim() ? '#22c55e' : 'rgba(255,255,255,0.1)',
+            color: hasDrawing && signatureName.trim() ? 'white' : '#64748b',
             cursor: hasDrawing && signatureName.trim() ? 'pointer' : 'not-allowed',
-            fontSize: '0.9rem',
-            fontWeight: '600'
+            fontSize: '13px',
+            fontWeight: '600',
+            boxShadow: hasDrawing && signatureName.trim() ? '0 0 16px rgba(34,197,94,0.3)' : 'none',
+            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
           }}
         >
           Save Signature

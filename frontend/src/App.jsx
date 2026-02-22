@@ -64,7 +64,7 @@ function App() {
         </div>
       </header>
 
-      <Suspense fallback={<div style={{display:'flex',justifyContent:'center',alignItems:'center',height:'50vh',fontSize:'1.1rem',color:'#666'}}>Loading...</div>}>
+      <Suspense fallback={<div style={{display:'flex',justifyContent:'center',alignItems:'center',height:'50vh',fontSize:'1.1rem',color:'#64748b'}}>Loading...</div>}>
         {isSupervisor ? (
           <SupervisorDashboard team={team} onLogout={handleLogout} />
         ) : (

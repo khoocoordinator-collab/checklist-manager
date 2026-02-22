@@ -568,9 +568,9 @@ function SupervisorDashboard({ team, onLogout }) {
                     {flaggedItems.map(flag => {
                       const isAcknowledged = flag.status === 'acknowledged'
                       const borderColor = isAcknowledged ? '#22c55e' : '#ef4444'
-                      const badgeBg = isAcknowledged ? '#f0fdf4' : '#fef2f2'
-                      const badgeColor = isAcknowledged ? '#16a34a' : '#ef4444'
-                      const badgeBorder = isAcknowledged ? '#bbf7d0' : '#fecaca'
+                      const badgeBg = isAcknowledged ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'
+                      const badgeColor = isAcknowledged ? '#4ade80' : '#f87171'
+                      const badgeBorder = isAcknowledged ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'
                       return (
                         <div key={flag.flag_id} className="checklist-card" style={{ borderLeft: `4px solid ${borderColor}` }}>
                           <div className="checklist-card-inner">
@@ -582,7 +582,7 @@ function SupervisorDashboard({ team, onLogout }) {
                                 <span>🏢 {flag.team_name}</span>
                               </div>
                               {flag.description && (
-                                <p style={{ margin: '6px 0 0', fontSize: '13px', color: '#555' }}>
+                                <p style={{ margin: '6px 0 0', fontSize: '13px', color: '#94a3b8' }}>
                                   {flag.description}
                                 </p>
                               )}
@@ -597,7 +597,7 @@ function SupervisorDashboard({ team, onLogout }) {
                                 </div>
                               )}
                               {isAcknowledged && (
-                                <p style={{ margin: '6px 0 0', fontSize: '12px', color: '#16a34a' }}>
+                                <p style={{ margin: '6px 0 0', fontSize: '12px', color: '#4ade80' }}>
                                   Acknowledged by <strong>{flag.acknowledged_by}</strong> on {formatDate(flag.acknowledged_at)}
                                 </p>
                               )}
@@ -606,7 +606,7 @@ function SupervisorDashboard({ team, onLogout }) {
                               <span className="status-badge" style={{ background: badgeBg, color: badgeColor, border: `1px solid ${badgeBorder}` }}>
                                 {isAcknowledged ? 'Acknowledged' : 'Active'}
                               </span>
-                              <span style={{ fontSize: '11px', color: '#888' }}>
+                              <span style={{ fontSize: '11px', color: '#64748b' }}>
                                 {formatDate(flag.flagged_at)}
                               </span>
                               {!isAcknowledged && (
@@ -631,9 +631,9 @@ function SupervisorDashboard({ team, onLogout }) {
                   <div className="modal-overlay" onClick={closeAcknowledgeModal}>
                     <div className="modal" onClick={e => e.stopPropagation()}>
                       <h3>Acknowledge Flag</h3>
-                      <p style={{ fontSize: '13px', color: '#666', marginBottom: '4px' }}>{acknowledgeFlag.item_text}</p>
+                      <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '4px' }}>{acknowledgeFlag.item_text}</p>
                       {acknowledgeFlag.description && (
-                        <p style={{ fontSize: '13px', color: '#555', marginBottom: '12px', fontStyle: 'italic' }}>"{acknowledgeFlag.description}"</p>
+                        <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '12px', fontStyle: 'italic' }}>"{acknowledgeFlag.description}"</p>
                       )}
                       <div className="form-group" style={{ marginBottom: '12px' }}>
                         <label style={{ fontSize: '13px', fontWeight: 600 }}>Your Name</label>
@@ -647,7 +647,7 @@ function SupervisorDashboard({ team, onLogout }) {
                         />
                       </div>
                       {acknowledgeMessage && (
-                        <p style={{ fontSize: '13px', color: '#ef4444', marginBottom: '8px' }}>{acknowledgeMessage}</p>
+                        <p style={{ fontSize: '13px', color: '#f87171', marginBottom: '8px' }}>{acknowledgeMessage}</p>
                       )}
                       <div className="modal-actions">
                         <button onClick={closeAcknowledgeModal} className="btn-secondary">Cancel</button>
@@ -788,22 +788,22 @@ function SupervisorDashboard({ team, onLogout }) {
             return (
               <div className="verification-panel">
                 <h4>👑 Supervisor Review</h4>
-                <p style={{ fontSize: '13px', color: '#666', margin: '0 0 16px' }}>
+                <p style={{ fontSize: '13px', color: '#94a3b8', margin: '0 0 16px' }}>
                   Review each item and confirm or reject it. Rejected items require a comment.
                 </p>
 
                 <div className="review-items">
                   {selectedChecklist.items?.map((item) => {
                     const review = supervisorReview[item.id] || { confirmed: null, comment: '' }
-                    const borderColor = review.confirmed === true ? '#22c55e' : review.confirmed === false ? '#ef4444' : '#e5e7eb'
+                    const borderColor = review.confirmed === true ? '#22c55e' : review.confirmed === false ? '#ef4444' : 'rgba(255,255,255,0.1)'
                     return (
-                      <div key={item.id} style={{ borderLeft: `3px solid ${borderColor}`, paddingLeft: '10px', marginBottom: '14px', transition: 'border-color 0.15s' }}>
+                      <div key={item.id} style={{ borderLeft: `3px solid ${borderColor}`, paddingLeft: '10px', marginBottom: '14px', transition: 'border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: 500 }}>{item.item_text}</p>
+                            <p style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: 500, color: '#f0f4f8' }}>{item.item_text}</p>
                             <div style={{ fontSize: '12px' }}>{renderItemResponse(item)}</div>
                             {item.supervisor_comment && selectedChecklist.status === 'resubmitted' && (
-                              <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#b45309', background: '#fffbeb', padding: '3px 6px', borderRadius: '3px', display: 'inline-block' }}>
+                              <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#f59e0b', background: 'rgba(245,158,11,0.1)', padding: '3px 6px', borderRadius: '3px', display: 'inline-block', border: '1px solid rgba(245,158,11,0.25)' }}>
                                 Previous: {item.supervisor_comment}
                               </p>
                             )}
@@ -813,9 +813,11 @@ function SupervisorDashboard({ team, onLogout }) {
                               onClick={() => setSupervisorReview(prev => ({ ...prev, [item.id]: { ...prev[item.id], confirmed: true } }))}
                               style={{
                                 padding: '4px 10px', fontSize: '12px', fontWeight: 600,
-                                background: review.confirmed === true ? '#22c55e' : '#f0fdf4',
-                                color: review.confirmed === true ? 'white' : '#16a34a',
-                                border: '1px solid #bbf7d0', borderRadius: '4px', cursor: 'pointer'
+                                background: review.confirmed === true ? '#22c55e' : 'rgba(34,197,94,0.1)',
+                                color: review.confirmed === true ? 'white' : '#4ade80',
+                                border: `1px solid ${review.confirmed === true ? '#22c55e' : 'rgba(34,197,94,0.25)'}`, borderRadius: '6px', cursor: 'pointer',
+                                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                boxShadow: review.confirmed === true ? '0 0 12px rgba(34,197,94,0.3)' : 'none'
                               }}
                             >
                               ✓ Confirm
@@ -824,9 +826,11 @@ function SupervisorDashboard({ team, onLogout }) {
                               onClick={() => setSupervisorReview(prev => ({ ...prev, [item.id]: { ...prev[item.id], confirmed: false } }))}
                               style={{
                                 padding: '4px 10px', fontSize: '12px', fontWeight: 600,
-                                background: review.confirmed === false ? '#ef4444' : '#fef2f2',
-                                color: review.confirmed === false ? 'white' : '#ef4444',
-                                border: '1px solid #fecaca', borderRadius: '4px', cursor: 'pointer'
+                                background: review.confirmed === false ? '#ef4444' : 'rgba(239,68,68,0.1)',
+                                color: review.confirmed === false ? 'white' : '#f87171',
+                                border: `1px solid ${review.confirmed === false ? '#ef4444' : 'rgba(239,68,68,0.25)'}`, borderRadius: '6px', cursor: 'pointer',
+                                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                boxShadow: review.confirmed === false ? '0 0 12px rgba(239,68,68,0.3)' : 'none'
                               }}
                             >
                               ✗ Reject
@@ -840,9 +844,10 @@ function SupervisorDashboard({ team, onLogout }) {
                             placeholder="Comment required for rejection..."
                             style={{
                               marginTop: '8px', width: '100%', padding: '6px 8px',
-                              border: '1px solid #fecaca', borderRadius: '4px',
+                              border: '1px solid rgba(239,68,68,0.25)', borderRadius: '6px',
                               fontSize: '12px', resize: 'vertical', minHeight: '60px',
-                              boxSizing: 'border-box'
+                              boxSizing: 'border-box', background: '#0d1320', color: '#f0f4f8',
+                              fontFamily: 'inherit'
                             }}
                           />
                         )}
@@ -864,7 +869,7 @@ function SupervisorDashboard({ team, onLogout }) {
                 </div>
 
                 {reviewError && (
-                  <p style={{ color: '#ef4444', fontSize: '13px', margin: '0 0 10px' }}>{reviewError}</p>
+                  <p style={{ color: '#f87171', fontSize: '13px', margin: '0 0 10px' }}>{reviewError}</p>
                 )}
 
                 {allConfirmed && (
@@ -883,7 +888,7 @@ function SupervisorDashboard({ team, onLogout }) {
                     onClick={handleSendForRework}
                     disabled={!supervisorName.trim()}
                     className="btn-verify"
-                    style={{ background: '#ef4444', borderColor: '#dc2626' }}
+                    style={{ background: '#ef4444', borderColor: '#ef4444', boxShadow: '0 0 16px rgba(239,68,68,0.3)' }}
                   >
                     <span>↩</span>
                     Send for Rework

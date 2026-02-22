@@ -11,7 +11,7 @@ createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <Routes>
         <Route path="/reports/*" element={
-          <Suspense fallback={<div style={{display:'flex',justifyContent:'center',alignItems:'center',height:'100vh',fontSize:'1.1rem',color:'#666'}}>Loading reports...</div>}>
+          <Suspense fallback={<div style={{display:'flex',justifyContent:'center',alignItems:'center',height:'100vh',fontSize:'1.1rem',color:'#64748b'}}>Loading reports...</div>}>
             <ReportsApp />
           </Suspense>
         } />
