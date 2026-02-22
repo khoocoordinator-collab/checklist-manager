@@ -1154,6 +1154,31 @@
   background: rgba(34,197,94,0.08);
 }
 
+/* Temperature input */
+.temperature-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.temperature-unit {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.temperature-range {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.item-input.flagged {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+  box-shadow: 0 0 8px rgba(239,68,68,0.2);
+}
+
 /* Note button */
 .btn-note {
   width: 36px;

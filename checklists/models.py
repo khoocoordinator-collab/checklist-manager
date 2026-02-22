@@ -142,12 +142,13 @@ class LibraryTask(models.Model):
         ('number', 'Number'),
         ('text', 'Text'),
         ('photo', 'Photo'),
+        ('temperature', 'Temperature'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     library_template = models.ForeignKey(LibraryTemplate, on_delete=models.CASCADE, related_name='tasks')
     task_name = models.CharField(max_length=48)
-    task_type = models.CharField(max_length=10, choices=TASK_TYPE_CHOICES, default='yes_no')
+    task_type = models.CharField(max_length=15, choices=TASK_TYPE_CHOICES, default='yes_no')
     order = models.IntegerField(default=0)
 
     class Meta:
@@ -190,6 +191,7 @@ class TemplateItem(models.Model):
         ('number', 'Number'),
         ('text', 'Text'),
         ('photo', 'Photo'),
+        ('temperature', 'Temperature'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -197,7 +199,10 @@ class TemplateItem(models.Model):
     text = models.CharField(max_length=48)
     order = models.IntegerField(default=0)
     is_required = models.BooleanField(default=True)
-    response_type = models.CharField(max_length=10, choices=RESPONSE_TYPE_CHOICES, default='yes_no')
+    response_type = models.CharField(max_length=15, choices=RESPONSE_TYPE_CHOICES, default='yes_no')
+    auto_flag = models.BooleanField(default=False)
+    temp_threshold_upper = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
+    temp_threshold_lower = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
 
     class Meta:
         ordering = ['order']
@@ -385,8 +390,11 @@ class InstanceItem(models.Model):
     instance = models.ForeignKey(ChecklistInstance, related_name='items', on_delete=models.CASCADE)
     template_item_id = models.UUIDField()
     item_text = models.CharField(max_length=500)
-    response_type = models.CharField(max_length=10, default='yes_no')
+    response_type = models.CharField(max_length=15, default='yes_no')
     response_value = models.CharField(max_length=500, blank=True)
+    auto_flag = models.BooleanField(default=False)
+    temp_threshold_upper = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
+    temp_threshold_lower = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
     is_checked = models.BooleanField(default=False)
     checked_at = models.DateTimeField(null=True, blank=True)
     notes = models.TextField(blank=True)

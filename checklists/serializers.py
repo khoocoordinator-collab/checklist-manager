@@ -5,7 +5,7 @@ from .models import Outlet, Team, ChecklistTemplate, TemplateItem, Schedule, Che
 class TemplateItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = TemplateItem
-        fields = ['id', 'text', 'order', 'is_required', 'response_type']
+        fields = ['id', 'text', 'order', 'is_required', 'response_type', 'auto_flag', 'temp_threshold_upper', 'temp_threshold_lower']
 
 
 class ChecklistTemplateSerializer(serializers.ModelSerializer):
@@ -74,8 +74,8 @@ class InstanceItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = InstanceItem
-        fields = ['id', 'template_item_id', 'item_text', 'response_type', 'response_value', 'is_checked', 'checked_at', 'photo', 'photo_url', 'photo_uploaded_at', 'current_flag', 'supervisor_confirmed', 'supervisor_comment']
-        read_only_fields = ['photo', 'supervisor_confirmed', 'supervisor_comment']  # These can only be set via dedicated endpoints
+        fields = ['id', 'template_item_id', 'item_text', 'response_type', 'response_value', 'is_checked', 'checked_at', 'photo', 'photo_url', 'photo_uploaded_at', 'current_flag', 'supervisor_confirmed', 'supervisor_comment', 'auto_flag', 'temp_threshold_upper', 'temp_threshold_lower']
+        read_only_fields = ['photo', 'supervisor_confirmed', 'supervisor_comment', 'auto_flag', 'temp_threshold_upper', 'temp_threshold_lower']
 
     def get_photo_url(self, obj):
         if obj.photo:

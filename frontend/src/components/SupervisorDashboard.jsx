@@ -386,6 +386,13 @@ function SupervisorDashboard({ team, onLogout }) {
       return <span className="tag tag-empty">No response</span>
     }
 
+    if (item.response_type === 'temperature') {
+      const isFlagged = item.current_flag && item.current_flag.status === 'active'
+      return value
+        ? <span className={`tag ${isFlagged ? 'tag-no' : 'tag-number'}`}>{'\uD83C\uDF21'} {value}{'\u00B0C'}</span>
+        : <span className="tag tag-empty">No reading</span>
+    }
+
     if (item.response_type === 'number') {
       return value ? <span className="tag tag-number">{value}</span> : <span className="tag tag-empty">No value</span>
     }

@@ -359,6 +359,61 @@ const activeFlagItemData = items.find(i => i.id === activeFlagItem)
     )
   }
 
+  // Auto-flag temperature readings that breach thresholds
+  const autoFlagTemperature = async (item) => {
+    if (item.response_type !== 'temperature' || !item.auto_flag) return
+    const value = parseFloat(item.response_value)
+    if (isNaN(value)) return
+
+    const upper = item.temp_threshold_upper != null ? parseFloat(item.temp_threshold_upper) : null
+    const lower = item.temp_threshold_lower != null ? parseFloat(item.temp_threshold_lower) : null
+
+    let breached = false
+    let message = ''
+
+    if (upper != null && value > upper) {
+      breached = true
+      message = `${item.item_text} temperature ${value}\u00B0C is above the safe upper limit of ${upper}\u00B0C`
+    } else if (lower != null && value < lower) {
+      breached = true
+      message = `${item.item_text} temperature ${value}\u00B0C is below the safe lower limit of ${lower}\u00B0C`
+    }
+
+    if (!breached) return
+    // Skip if active flag already exists
+    if (item.current_flag && item.current_flag.status !== 'acknowledged') return
+
+    try {
+      const response = await fetch(`${API_BASE}/api/flag-item/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_id: item.id, description: message })
+      })
+      const data = await response.json()
+      if (data.flag_id) {
+        setItems(prev => prev.map(i => {
+          if (i.id === item.id) {
+            return {
+              ...i,
+              current_flag: {
+                id: data.flag_id,
+                description: data.description,
+                flagged_at: data.flagged_at,
+                photo_url: data.photo_url,
+                photo_uploaded_at: null,
+                resolved_at: null,
+                status: 'active',
+              }
+            }
+          }
+          return i
+        }))
+      }
+    } catch (err) {
+      console.error('Auto-flag error:', err)
+    }
+  }
+
   const renderResponseInput = (item, index) => {
     const isComplete = isItemComplete(item)
 
@@ -456,6 +511,33 @@ const activeFlagItemData = items.find(i => i.id === activeFlagItem)
             >
               {uploadingPhoto === item.id ? '⏳ Uploading...' : '📷 Take Photo'}
             </button>
+          )}
+          {renderFlagButton(item)}
+        </div>
+      )
+    }
+
+    if (item.response_type === 'temperature') {
+      const hasBothThresholds = item.temp_threshold_lower != null && item.temp_threshold_upper != null
+      const isFlagged = item.current_flag && item.current_flag.status === 'active'
+      return (
+        <div className="item-controls">
+          <div className="temperature-input-wrapper">
+            <input
+              type="number"
+              step="0.1"
+              inputMode="decimal"
+              value={item.response_value || ''}
+              onChange={(e) => updateResponseValue(item.id, e.target.value)}
+              onBlur={() => autoFlagTemperature(item)}
+              placeholder="0.0"
+              disabled={isReadOnly}
+              className={`item-input ${isComplete ? 'complete' : ''} ${isFlagged ? 'flagged' : ''}`}
+            />
+            <span className="temperature-unit">{'\u00B0C'}</span>
+          </div>
+          {hasBothThresholds && (
+            <span className="temperature-range">{parseFloat(item.temp_threshold_lower)}&ndash;{parseFloat(item.temp_threshold_upper)}{'\u00B0C'}</span>
           )}
           {renderFlagButton(item)}
         </div>

@@ -117,7 +117,7 @@ class TeamAdmin(OutletScopedMixin, admin.ModelAdmin):
 
 # ─── Checklist Library ────────────────────────────────────────────────────────
 
-VALID_TASK_TYPES = {'yes_no', 'number', 'text', 'photo'}
+VALID_TASK_TYPES = {'yes_no', 'number', 'text', 'photo', 'temperature'}
 
 
 class AIChecklistForm(forms.Form):
@@ -211,7 +211,8 @@ class LibraryTemplateAdmin(admin.ModelAdmin):
                         system=(
                             'You are generating checklist tasks for a restaurant compliance system. '
                             'Every task must have a name (max 48 characters) and a type. '
-                            'The type must be strictly one of these four values only: yes_no, photo, number, or text. '
+                            'The type must be strictly one of these five values only: yes_no, photo, number, text, or temperature. '
+                            'Use temperature for any task that involves checking a temperature reading (e.g. fridge, freezer, holding). '
                             'No other values are permitted. '
                             f'{lang_instruction} '
                             'Respond with valid JSON in the format {"tasks": [{"task_name": "...", "task_type": "..."}]} '
@@ -309,7 +310,10 @@ class LibraryTemplateAdmin(admin.ModelAdmin):
 class TemplateItemInline(admin.TabularInline):
     model = TemplateItem
     extra = 1
-    fields = ['text', 'order', 'is_required', 'response_type']
+    fields = ['text', 'order', 'is_required', 'response_type', 'auto_flag', 'temp_threshold_lower', 'temp_threshold_upper']
+    formfield_overrides = {
+        models.DecimalField: {'widget': forms.NumberInput(attrs={'style': 'width: 70px;'})},
+    }
 
 
 @admin.register(ChecklistTemplate)
@@ -410,7 +414,10 @@ class ChecklistTemplateAdmin(OutletScopedMixin, admin.ModelAdmin):
                     text=item.text,
                     order=item.order,
                     is_required=item.is_required,
-                    response_type=item.response_type
+                    response_type=item.response_type,
+                    auto_flag=item.auto_flag,
+                    temp_threshold_upper=item.temp_threshold_upper,
+                    temp_threshold_lower=item.temp_threshold_lower,
                 )
             duplicated.append(new_template.title)
         
@@ -495,7 +502,10 @@ class ChecklistTemplateAdmin(OutletScopedMixin, admin.ModelAdmin):
                         template_item_id=item.id,
                         item_text=item.text,
                         response_type=item.response_type,
-                        is_checked=False
+                        is_checked=False,
+                        auto_flag=item.auto_flag,
+                        temp_threshold_upper=item.temp_threshold_upper,
+                        temp_threshold_lower=item.temp_threshold_lower,
                     )
 
                 messages.success(request, f'Checklist instance created with supervisor team: {instance.date_label} - {instance.template.title}')
@@ -528,7 +538,10 @@ class ChecklistTemplateAdmin(OutletScopedMixin, admin.ModelAdmin):
                 template_item_id=item.id,
                 item_text=item.text,
                 response_type=item.response_type,
-                is_checked=False
+                is_checked=False,
+                auto_flag=item.auto_flag,
+                temp_threshold_upper=item.temp_threshold_upper,
+                temp_threshold_lower=item.temp_threshold_lower,
             )
 
         messages.success(request, f'Checklist instance created: {instance.date_label} - {instance.template.title}')
