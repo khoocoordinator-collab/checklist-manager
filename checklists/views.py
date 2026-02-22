@@ -738,6 +738,36 @@ def flag_item(request):
 @api_view(['POST'])
 @authentication_classes([])
 @permission_classes([AllowAny])
+def resolve_flag(request):
+    """
+    POST /api/resolve-flag/
+    Body: { item_id }
+    Resolves the active FlaggedItem for an InstanceItem (sets resolved_at).
+    Used by auto-flag when the user corrects their answer.
+    """
+    item_id = request.data.get('item_id')
+
+    if not item_id:
+        return Response({'error': 'item_id required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        item = InstanceItem.objects.get(id=item_id)
+    except InstanceItem.DoesNotExist:
+        return Response({'error': 'Item not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    flag = item.flags.filter(resolved_at__isnull=True, acknowledged_at__isnull=True).first()
+    if not flag:
+        return Response({'resolved': False, 'reason': 'No active unacknowledged flag'})
+
+    flag.resolved_at = timezone.now()
+    flag.save(update_fields=['resolved_at'])
+
+    return Response({'resolved': True, 'flag_id': str(flag.id)})
+
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def upload_flag_photo(request):
     """
     POST /api/upload-flag-photo/

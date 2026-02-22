@@ -163,17 +163,25 @@ function ChecklistForm({ checklist, team, onBack }) {
 
   const setYesNoValue = (itemId, value) => {
     if (isReadOnly) return
-    setItems(prev => prev.map(item => {
-      if (item.id === itemId) {
-        return {
-          ...item,
-          response_value: value,
-          is_checked: true,
-          checked_at: new Date().toISOString()
+    setItems(prev => {
+      const updated = prev.map(item => {
+        if (item.id === itemId) {
+          return {
+            ...item,
+            response_value: value,
+            is_checked: true,
+            checked_at: new Date().toISOString()
+          }
         }
+        return item
+      })
+      // Trigger auto-flag check after state update
+      const updatedItem = updated.find(i => i.id === itemId)
+      if (updatedItem) {
+        setTimeout(() => autoFlagCheck(updatedItem), 0)
       }
-      return item
-    }))
+      return updated
+    })
     setSaved(false)
   }
 
@@ -359,27 +367,61 @@ const activeFlagItemData = items.find(i => i.id === activeFlagItem)
     )
   }
 
-  // Auto-flag temperature readings that breach thresholds
-  const autoFlagTemperature = async (item) => {
-    if (item.response_type !== 'temperature' || !item.auto_flag) return
-    const value = parseFloat(item.response_value)
-    if (isNaN(value)) return
-
-    const upper = item.temp_threshold_upper != null ? parseFloat(item.temp_threshold_upper) : null
-    const lower = item.temp_threshold_lower != null ? parseFloat(item.temp_threshold_lower) : null
+  // Generic auto-flag check — works for yes_no, number, and temperature
+  const autoFlagCheck = async (item) => {
+    const rules = item.auto_flag_rules
+    if (!rules || Object.keys(rules).length === 0) return
 
     let breached = false
     let message = ''
 
-    if (upper != null && value > upper) {
-      breached = true
-      message = `${item.item_text} temperature ${value}\u00B0C is above the safe upper limit of ${upper}\u00B0C`
-    } else if (lower != null && value < lower) {
-      breached = true
-      message = `${item.item_text} temperature ${value}\u00B0C is below the safe lower limit of ${lower}\u00B0C`
+    if (item.response_type === 'yes_no') {
+      const val = item.response_value
+      if (rules.flag_yes && val === 'yes') {
+        breached = true
+        message = `${item.item_text}: "Yes" response was flagged`
+      } else if (rules.flag_no && val === 'no') {
+        breached = true
+        message = `${item.item_text}: "No" response was flagged`
+      }
+    } else if (item.response_type === 'temperature' || item.response_type === 'number') {
+      const value = parseFloat(item.response_value)
+      if (isNaN(value)) return
+      const upper = rules.upper != null ? parseFloat(rules.upper) : null
+      const lower = rules.lower != null ? parseFloat(rules.lower) : null
+      const unit = item.response_type === 'temperature' ? '\u00B0C' : ''
+      const label = item.response_type === 'temperature' ? 'temperature' : 'value'
+
+      if (upper != null && value > upper) {
+        breached = true
+        message = `${item.item_text} ${label} ${value}${unit} is above the upper limit of ${upper}${unit}`
+      } else if (lower != null && value < lower) {
+        breached = true
+        message = `${item.item_text} ${label} ${value}${unit} is below the lower limit of ${lower}${unit}`
+      }
     }
 
-    if (!breached) return
+    if (!breached) {
+      // Auto-resolve if there's an active flag that's no longer warranted
+      if (item.current_flag && item.current_flag.status === 'active') {
+        try {
+          const res = await fetch(`${API_BASE}/api/resolve-flag/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item_id: item.id })
+          })
+          const data = await res.json()
+          if (data.resolved) {
+            setItems(prev => prev.map(i =>
+              i.id === item.id ? { ...i, current_flag: null } : i
+            ))
+          }
+        } catch (err) {
+          console.error('Auto-resolve flag error:', err)
+        }
+      }
+      return
+    }
     // Skip if active flag already exists
     if (item.current_flag && item.current_flag.status !== 'acknowledged') return
 
@@ -447,16 +489,23 @@ const activeFlagItemData = items.find(i => i.id === activeFlagItem)
     }
 
     if (item.response_type === 'number') {
+      const rules = item.auto_flag_rules || {}
+      const hasThresholds = rules.lower != null && rules.upper != null
+      const isFlagged = item.current_flag && item.current_flag.status === 'active'
       return (
         <div className="item-controls">
           <input
             type="number"
             value={item.response_value || ''}
             onChange={(e) => updateResponseValue(item.id, e.target.value)}
+            onBlur={() => autoFlagCheck(item)}
             placeholder="Enter number..."
             disabled={isReadOnly}
-            className={`item-input ${isComplete ? 'complete' : ''}`}
+            className={`item-input ${isComplete ? 'complete' : ''} ${isFlagged ? 'flagged' : ''}`}
           />
+          {hasThresholds && (
+            <span className="temperature-range">{parseFloat(rules.lower)}&ndash;{parseFloat(rules.upper)}</span>
+          )}
           {renderFlagButton(item)}
         </div>
       )
@@ -518,7 +567,8 @@ const activeFlagItemData = items.find(i => i.id === activeFlagItem)
     }
 
     if (item.response_type === 'temperature') {
-      const hasBothThresholds = item.temp_threshold_lower != null && item.temp_threshold_upper != null
+      const rules = item.auto_flag_rules || {}
+      const hasBothThresholds = rules.lower != null && rules.upper != null
       const isFlagged = item.current_flag && item.current_flag.status === 'active'
       return (
         <div className="item-controls">
@@ -529,7 +579,7 @@ const activeFlagItemData = items.find(i => i.id === activeFlagItem)
               inputMode="decimal"
               value={item.response_value || ''}
               onChange={(e) => updateResponseValue(item.id, e.target.value)}
-              onBlur={() => autoFlagTemperature(item)}
+              onBlur={() => autoFlagCheck(item)}
               placeholder="0.0"
               disabled={isReadOnly}
               className={`item-input ${isComplete ? 'complete' : ''} ${isFlagged ? 'flagged' : ''}`}
@@ -537,7 +587,7 @@ const activeFlagItemData = items.find(i => i.id === activeFlagItem)
             <span className="temperature-unit">{'\u00B0C'}</span>
           </div>
           {hasBothThresholds && (
-            <span className="temperature-range">{parseFloat(item.temp_threshold_lower)}&ndash;{parseFloat(item.temp_threshold_upper)}{'\u00B0C'}</span>
+            <span className="temperature-range">{parseFloat(rules.lower)}&ndash;{parseFloat(rules.upper)}{'\u00B0C'}</span>
           )}
           {renderFlagButton(item)}
         </div>

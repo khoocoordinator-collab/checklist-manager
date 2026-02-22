@@ -21,6 +21,7 @@ urlpatterns = [
     path('supervisor/rework/', views.supervisor_rework, name='supervisor_rework'),
     path('flags/', views.flags_view, name='flags'),
     path('flag-item/', views.flag_item, name='flag_item'),
+    path('resolve-flag/', views.resolve_flag, name='resolve_flag'),
     path('upload-flag-photo/', views.upload_flag_photo, name='upload_flag_photo'),
     path('acknowledge-flag/', views.acknowledge_flag, name='acknowledge_flag'),
     # Reports endpoints

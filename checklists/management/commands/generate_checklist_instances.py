@@ -104,9 +104,7 @@ class Command(BaseCommand):
                         item_text=item.text,
                         response_type=item.response_type,
                         is_checked=False,
-                        auto_flag=item.auto_flag,
-                        temp_threshold_upper=item.temp_threshold_upper,
-                        temp_threshold_lower=item.temp_threshold_lower,
+                        auto_flag_rules=item.auto_flag_rules,
                     )
 
                 created += 1

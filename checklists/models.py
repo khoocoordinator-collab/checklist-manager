@@ -200,9 +200,7 @@ class TemplateItem(models.Model):
     order = models.IntegerField(default=0)
     is_required = models.BooleanField(default=True)
     response_type = models.CharField(max_length=15, choices=RESPONSE_TYPE_CHOICES, default='yes_no')
-    auto_flag = models.BooleanField(default=False)
-    temp_threshold_upper = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
-    temp_threshold_lower = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
+    auto_flag_rules = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ['order']
@@ -392,9 +390,7 @@ class InstanceItem(models.Model):
     item_text = models.CharField(max_length=500)
     response_type = models.CharField(max_length=15, default='yes_no')
     response_value = models.CharField(max_length=500, blank=True)
-    auto_flag = models.BooleanField(default=False)
-    temp_threshold_upper = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
-    temp_threshold_lower = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
+    auto_flag_rules = models.JSONField(default=dict, blank=True)
     is_checked = models.BooleanField(default=False)
     checked_at = models.DateTimeField(null=True, blank=True)
     notes = models.TextField(blank=True)

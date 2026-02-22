@@ -1,0 +1,130 @@
+{% extends "admin/change_form.html" %}
+
+{% block admin_change_form_document_ready %}
+{{ block.super }}
+<script>
+(function(){
+  function buildUI(row) {
+    var sel = row.querySelector('select[name$="-response_type"]');
+    var ta = row.querySelector('textarea[name$="-auto_flag_rules"]');
+    if (!sel || !ta) return;
+
+    // Create a wrapper div next to the hidden textarea
+    var wrap = ta.parentNode.querySelector('.rules-ui');
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.className = 'rules-ui';
+      wrap.style.cssText = 'display:inline-block;font-size:12px;';
+      ta.parentNode.appendChild(wrap);
+    }
+
+    var type = sel.value;
+    var rules = {};
+    try { rules = JSON.parse(ta.value) || {}; } catch(e) { rules = {}; }
+
+    wrap.innerHTML = '';
+
+    if (type === 'yes_no') {
+      var lY = document.createElement('label');
+      lY.style.cssText = 'display:block;margin:2px 0;white-space:nowrap;cursor:pointer;';
+      var cbY = document.createElement('input');
+      cbY.type = 'checkbox';
+      cbY.checked = !!rules.flag_yes;
+      cbY.style.marginRight = '4px';
+      cbY.addEventListener('change', function(){ sync(ta, row); });
+      lY.appendChild(cbY);
+      lY.appendChild(document.createTextNode('Flag if Yes'));
+      wrap.appendChild(lY);
+
+      var lN = document.createElement('label');
+      lN.style.cssText = 'display:block;margin:2px 0;white-space:nowrap;cursor:pointer;';
+      var cbN = document.createElement('input');
+      cbN.type = 'checkbox';
+      cbN.checked = !!rules.flag_no;
+      cbN.style.marginRight = '4px';
+      cbN.addEventListener('change', function(){ sync(ta, row); });
+      lN.appendChild(cbN);
+      lN.appendChild(document.createTextNode('Flag if No'));
+      wrap.appendChild(lN);
+
+    } else if (type === 'temperature' || type === 'number') {
+      var unit = type === 'temperature' ? '\u00B0C' : '';
+
+      var lLo = document.createElement('label');
+      lLo.style.cssText = 'display:block;margin:2px 0;white-space:nowrap;';
+      lLo.appendChild(document.createTextNode('Lower: '));
+      var inLo = document.createElement('input');
+      inLo.type = 'number';
+      inLo.step = '0.1';
+      inLo.style.cssText = 'width:70px;';
+      inLo.value = rules.lower != null ? rules.lower : '';
+      inLo.addEventListener('change', function(){ sync(ta, row); });
+      inLo.addEventListener('input', function(){ sync(ta, row); });
+      lLo.appendChild(inLo);
+      if (unit) lLo.appendChild(document.createTextNode(' ' + unit));
+      wrap.appendChild(lLo);
+
+      var lHi = document.createElement('label');
+      lHi.style.cssText = 'display:block;margin:2px 0;white-space:nowrap;';
+      lHi.appendChild(document.createTextNode('Upper: '));
+      var inHi = document.createElement('input');
+      inHi.type = 'number';
+      inHi.step = '0.1';
+      inHi.style.cssText = 'width:70px;';
+      inHi.value = rules.upper != null ? rules.upper : '';
+      inHi.addEventListener('change', function(){ sync(ta, row); });
+      inHi.addEventListener('input', function(){ sync(ta, row); });
+      lHi.appendChild(inHi);
+      if (unit) lHi.appendChild(document.createTextNode(' ' + unit));
+      wrap.appendChild(lHi);
+
+    } else {
+      // text, photo — hide entirely
+      var cell = ta.closest('td');
+      if (cell) cell.style.visibility = 'hidden';
+      ta.value = '{}';
+      return;
+    }
+
+    // Make sure cell is visible for types that have UI
+    var cell = ta.closest('td');
+    if (cell) cell.style.visibility = '';
+  }
+
+  function sync(ta, row) {
+    var sel = row.querySelector('select[name$="-response_type"]');
+    var wrap = ta.parentNode.querySelector('.rules-ui');
+    if (!sel || !wrap) return;
+    var type = sel.value;
+    var rules = {};
+
+    if (type === 'yes_no') {
+      var cbs = wrap.querySelectorAll('input[type="checkbox"]');
+      if (cbs[0] && cbs[0].checked) rules.flag_yes = true;
+      if (cbs[1] && cbs[1].checked) rules.flag_no = true;
+    } else if (type === 'temperature' || type === 'number') {
+      var nums = wrap.querySelectorAll('input[type="number"]');
+      if (nums[0] && nums[0].value !== '') rules.lower = parseFloat(nums[0].value);
+      if (nums[1] && nums[1].value !== '') rules.upper = parseFloat(nums[1].value);
+    }
+
+    ta.value = JSON.stringify(rules);
+  }
+
+  function bind(row) {
+    var sel = row.querySelector('select[name$="-response_type"]');
+    if (!sel) return;
+    sel.addEventListener('change', function(){ buildUI(row); });
+    buildUI(row);
+  }
+
+  document.querySelectorAll('.inline-related tr.form-row').forEach(bind);
+  var tb = document.querySelector('.inline-related tbody');
+  if (tb) new MutationObserver(function(muts){
+    muts.forEach(function(m){ m.addedNodes.forEach(function(n){
+      if (n.nodeType === 1 && n.tagName === 'TR') bind(n);
+    });});
+  }).observe(tb, {childList: true});
+})();
+</script>
+{% endblock %}

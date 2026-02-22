@@ -310,9 +310,9 @@ class LibraryTemplateAdmin(admin.ModelAdmin):
 class TemplateItemInline(admin.TabularInline):
     model = TemplateItem
     extra = 1
-    fields = ['text', 'order', 'is_required', 'response_type', 'auto_flag', 'temp_threshold_lower', 'temp_threshold_upper']
+    fields = ['text', 'order', 'is_required', 'response_type', 'auto_flag_rules']
     formfield_overrides = {
-        models.DecimalField: {'widget': forms.NumberInput(attrs={'style': 'width: 70px;'})},
+        models.JSONField: {'widget': Textarea(attrs={'rows': 1, 'cols': 20, 'style': 'display:none;'})},
     }
 
 
@@ -415,9 +415,7 @@ class ChecklistTemplateAdmin(OutletScopedMixin, admin.ModelAdmin):
                     order=item.order,
                     is_required=item.is_required,
                     response_type=item.response_type,
-                    auto_flag=item.auto_flag,
-                    temp_threshold_upper=item.temp_threshold_upper,
-                    temp_threshold_lower=item.temp_threshold_lower,
+                    auto_flag_rules=item.auto_flag_rules,
                 )
             duplicated.append(new_template.title)
         
@@ -503,9 +501,7 @@ class ChecklistTemplateAdmin(OutletScopedMixin, admin.ModelAdmin):
                         item_text=item.text,
                         response_type=item.response_type,
                         is_checked=False,
-                        auto_flag=item.auto_flag,
-                        temp_threshold_upper=item.temp_threshold_upper,
-                        temp_threshold_lower=item.temp_threshold_lower,
+                        auto_flag_rules=item.auto_flag_rules,
                     )
 
                 messages.success(request, f'Checklist instance created with supervisor team: {instance.date_label} - {instance.template.title}')
@@ -539,9 +535,7 @@ class ChecklistTemplateAdmin(OutletScopedMixin, admin.ModelAdmin):
                 item_text=item.text,
                 response_type=item.response_type,
                 is_checked=False,
-                auto_flag=item.auto_flag,
-                temp_threshold_upper=item.temp_threshold_upper,
-                temp_threshold_lower=item.temp_threshold_lower,
+                auto_flag_rules=item.auto_flag_rules,
             )
 
         messages.success(request, f'Checklist instance created: {instance.date_label} - {instance.template.title}')
