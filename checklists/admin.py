@@ -70,6 +70,8 @@ class OutletScopedMixin:
                 kwargs['queryset'] = Team.objects.filter(outlet__in=outlets)
             elif db_field.name == 'supervisor_team':
                 kwargs['queryset'] = Team.objects.filter(outlet__in=outlets)
+            elif db_field.name == 'default_supervisor_team':
+                kwargs['queryset'] = Team.objects.filter(outlet__in=outlets, supervisor_pin__gt='')
             elif db_field.name == 'template':
                 kwargs['queryset'] = ChecklistTemplate.objects.filter(team__outlet__in=outlets)
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
@@ -98,6 +100,12 @@ class ChecklistTemplateForm(ModelForm):
     class Meta:
         model = ChecklistTemplate
         exclude = ['created_by']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['default_supervisor_team'].queryset = (
+            self.fields['default_supervisor_team'].queryset.filter(supervisor_pin__gt='')
+        )
 
 
 @admin.register(Outlet)
@@ -330,7 +338,7 @@ class ChecklistTemplateAdmin(OutletScopedMixin, admin.ModelAdmin):
             'fields': ('title', 'description', 'team', 'schedule')
         }),
         ('Settings', {
-            'fields': ('requires_supervisor', 'validity_window_hours', 'supervisor_validity_window_hours', 'is_hidden'),
+            'fields': ('requires_supervisor', 'default_supervisor_team', 'validity_window_hours', 'supervisor_validity_window_hours', 'is_hidden'),
             'description': 'Configure validation, staff/supervisor windows, and visibility settings'
         }),
     )
@@ -467,6 +475,7 @@ class ChecklistTemplateAdmin(OutletScopedMixin, admin.ModelAdmin):
                     return render(request, 'admin/checklists/select_supervisor.html', {
                         'template': template,
                         'supervisor_teams': supervisor_teams,
+                        'default_supervisor_team_id': template.default_supervisor_team_id,
                         'opts': self.model._meta,
                     })
                 try:
@@ -476,6 +485,7 @@ class ChecklistTemplateAdmin(OutletScopedMixin, admin.ModelAdmin):
                     return render(request, 'admin/checklists/select_supervisor.html', {
                         'template': template,
                         'supervisor_teams': supervisor_teams,
+                        'default_supervisor_team_id': template.default_supervisor_team_id,
                         'opts': self.model._meta,
                     })
 
@@ -489,9 +499,9 @@ class ChecklistTemplateAdmin(OutletScopedMixin, admin.ModelAdmin):
                     created_by=created_by,
                     status='pending',
                     supervisor_team=supervisor_team,
-                    validity_window_hours=template.validity_window_hours,
+                    validity_window_hours=0,
                     supervisor_validity_window_hours=template.supervisor_validity_window_hours,
-                    scheduled_time=template.schedule.time_of_day if template.schedule else None,
+                    scheduled_time=None,
                 )
 
                 for item in template.items.all():
@@ -510,6 +520,7 @@ class ChecklistTemplateAdmin(OutletScopedMixin, admin.ModelAdmin):
             return render(request, 'admin/checklists/select_supervisor.html', {
                 'template': template,
                 'supervisor_teams': supervisor_teams,
+                'default_supervisor_team_id': template.default_supervisor_team_id,
                 'opts': self.model._meta,
             })
 
@@ -523,9 +534,9 @@ class ChecklistTemplateAdmin(OutletScopedMixin, admin.ModelAdmin):
             date_label=date_label,
             created_by=created_by,
             status='pending',
-            validity_window_hours=template.validity_window_hours,
+            validity_window_hours=0,
             supervisor_validity_window_hours=template.supervisor_validity_window_hours,
-            scheduled_time=template.schedule.time_of_day if template.schedule else None,
+            scheduled_time=None,
         )
 
         for item in template.items.all():

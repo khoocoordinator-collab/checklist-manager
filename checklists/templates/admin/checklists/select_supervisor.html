@@ -96,7 +96,7 @@
     <select name="supervisor_team" id="supervisor_team" required>
       <option value="">-- Select a supervisor team --</option>
       {% for team in supervisor_teams %}
-        <option value="{{ team.id }}">{{ team.name }} ({{ team.outlet }})</option>
+        <option value="{{ team.id }}" {% if team.id == default_supervisor_team_id %}selected{% endif %}>{{ team.name }} ({{ team.outlet }})</option>
       {% endfor %}
     </select>
     <p class="help-text">

@@ -8,7 +8,7 @@ from django.contrib.auth.models import User, Group
 
 class Outlet(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100, unique=True)
     location = models.CharField(max_length=200, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -23,6 +23,9 @@ class Team(models.Model):
     staff_pin = models.CharField(max_length=4, blank=True, default='')
     supervisor_pin = models.CharField(max_length=4, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('outlet', 'name')]
 
     def __str__(self):
         return f"{self.outlet.name} - {self.name}"
@@ -102,21 +105,7 @@ class Schedule(models.Model):
                 raise ValidationError('Day of month must be between 1 and 28')
 
     def __str__(self):
-        parts = [self.name, '(']
-
-        if self.frequency == 'daily':
-            parts.append(f"Daily at {self.time_of_day.strftime('%H:%M')}")
-        elif self.frequency == 'weekly':
-            day_name = dict(self.DAY_OF_WEEK_CHOICES).get(self.day_of_week, 'Unknown')
-            parts.append(f"Weekly on {day_name} at {self.time_of_day.strftime('%H:%M')}")
-        elif self.frequency == 'bi_weekly':
-            day_name = dict(self.DAY_OF_WEEK_CHOICES).get(self.day_of_week, 'Unknown')
-            parts.append(f"Bi-Weekly on {day_name} at {self.time_of_day.strftime('%H:%M')}")
-        elif self.frequency == 'monthly':
-            parts.append(f"Monthly on {self.day_of_month}{self._get_ordinal(self.day_of_month)} at {self.time_of_day.strftime('%H:%M')}")
-
-        parts.append(')')
-        return ''.join(parts)
+        return self.name
 
 
 class LibraryTemplate(models.Model):
@@ -171,6 +160,11 @@ class ChecklistTemplate(models.Model):
     requires_supervisor = models.BooleanField(
         default=False,
         help_text="If checked, this checklist requires supervisor validation before being marked complete."
+    )
+    default_supervisor_team = models.ForeignKey(
+        Team, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='supervised_templates',
+        help_text="Default supervisor team for this checklist. Any outlet supervisor can still verify."
     )
     validity_window_hours = models.IntegerField(
         default=3,

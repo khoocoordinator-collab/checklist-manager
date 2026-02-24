@@ -72,10 +72,12 @@ class Command(BaseCommand):
                 # Resolve supervisor team if required
                 supervisor_team = None
                 if template.requires_supervisor:
-                    supervisor_team = Team.objects.filter(
-                        supervisor_pin__gt='',
-                        outlet=template.team.outlet
-                    ).first()
+                    supervisor_team = template.default_supervisor_team
+                    if not supervisor_team:
+                        supervisor_team = Team.objects.filter(
+                            supervisor_pin__gt='',
+                            outlet=template.team.outlet
+                        ).first()
                     if not supervisor_team:
                         self.stdout.write(
                             self.style.WARNING(
