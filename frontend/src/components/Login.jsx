@@ -10,6 +10,7 @@ function Login({ onLogin }) {
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [loginResult, setLoginResult] = useState(null) // { team, role } held until attestation confirmed
 
   // Load outlets on mount, restore saved outlet + team
   useEffect(() => {
@@ -111,7 +112,8 @@ function Login({ onLogin }) {
       })
       const data = await res.json()
       if (data.success) {
-        onLogin(data.team, data.role)
+        setLoginResult({ team: data.team, role: data.role })
+        setStep(4)
       } else {
         setError(data.error || 'Invalid PIN')
       }
@@ -139,6 +141,34 @@ function Login({ onLogin }) {
     setError('')
     localStorage.removeItem('selected_team')
     setStep(2)
+  }
+
+  // Step 4: Attestation
+  if (step === 4 && loginResult) {
+    return (
+      <div className="login-container">
+        <div className="login-card login-card-wide">
+          <div className="attestation-icon">&#x1F6E1;&#xFE0F;</div>
+          <h2>Attestation</h2>
+          <p className="attestation-text">
+            Saya konfirmasi checklist ini sudah diisi dengan benar dan semua pekerjaan sudah dilakukan sesuai yang dicatat. Saya paham bahwa laporan palsu adalah pelanggaran serius terhadap kebijakan perusahaan.
+          </p>
+          <button
+            className="btn-login btn-attestation"
+            onClick={() => onLogin(loginResult.team, loginResult.role)}
+          >
+            I Confirm
+          </button>
+          <button
+            className="login-change-link"
+            onClick={() => { setLoginResult(null); setPin(''); setStep(3) }}
+            style={{ marginTop: '12px', display: 'block', width: '100%' }}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    )
   }
 
   // Step 1: Select Outlet
