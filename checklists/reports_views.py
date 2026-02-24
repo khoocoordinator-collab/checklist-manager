@@ -135,16 +135,17 @@ def report_summary(request):
 
     # On-time completion rate, grouped by outlet or team
     # If a single outlet is selected, break down by team; otherwise by outlet
+    # Includes expired instances in the denominator (they count as late)
     outlet_filter = request.query_params.get('outlet')
-    completed_instances = instances_qs.filter(
-        status__in=['completed', 'verified']
+    deadline_instances = instances_qs.filter(
+        status__in=['completed', 'verified', 'expired']
     ).select_related('template', 'team__outlet')
 
     on_time_buckets = {}  # key → {on_time, with_deadline, label}
     on_time_total = 0
     with_deadline_total = 0
 
-    for inst in completed_instances:
+    for inst in deadline_instances:
         deadline = inst.get_deadline()
         if deadline is None:
             continue
@@ -161,6 +162,10 @@ def report_summary(request):
 
         on_time_buckets[key]['with_deadline'] += 1
         with_deadline_total += 1
+
+        # Expired instances are never on time
+        if inst.status == 'expired':
+            continue
 
         completion_time = inst.synced_at or inst.created_at
         if completion_time and completion_time <= deadline:

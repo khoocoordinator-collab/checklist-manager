@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { apiFetch } from '../api.js';
 import { useFilters } from '../FiltersContext.jsx';
@@ -6,10 +7,22 @@ import KPICard from '../components/KPICard.jsx';
 import GaugeChart from '../components/GaugeChart.jsx';
 import ProgressRing from '../components/ProgressRing.jsx';
 
+function timeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
 export default function OverviewPage() {
   const { queryString } = useFilters();
   const [summary, setSummary] = useState(null);
   const [trends, setTrends] = useState([]);
+  const [flags, setFlags] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -18,9 +31,11 @@ export default function OverviewPage() {
     Promise.all([
       apiFetch(`/reports/summary/${qs}`),
       apiFetch(`/reports/flag-trends/${qs}`),
+      apiFetch(`/reports/flagged-items/${qs}`),
     ])
-      .then(([summaryData, trendsData]) => {
+      .then(([summaryData, trendsData, flagsData]) => {
         setSummary(summaryData);
+        setFlags(flagsData.slice(0, 10));
         // Transform trends into chart data: group by date, one key per outlet
         const byDate = {};
         const outletSet = new Set();
@@ -72,6 +87,54 @@ export default function OverviewPage() {
           </div>
         </div>
       )}
+
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-medium text-gray-400">Recent Flagged Items</h2>
+          <Link to="/reports/flagged-items" className="text-xs text-blue-400 hover:text-blue-300">
+            View all
+          </Link>
+        </div>
+        {flags.length === 0 ? (
+          <p className="text-gray-500 text-sm">No flagged items found.</p>
+        ) : (
+          <div className="space-y-2">
+            {flags.map(flag => (
+              <div
+                key={flag.id}
+                className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 flex items-center gap-4"
+              >
+                <span
+                  className={`shrink-0 w-2 h-2 rounded-full ${
+                    flag.status === 'active' ? 'bg-red-400' : 'bg-green-400'
+                  }`}
+                />
+                {flag.photo_url && (
+                  <a href={flag.photo_url} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                    <img
+                      src={flag.photo_url}
+                      alt=""
+                      className="w-10 h-10 object-cover rounded border border-gray-600 hover:border-blue-500 transition-colors"
+                    />
+                  </a>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-white truncate">{flag.item_text}</p>
+                  <p className="text-xs text-gray-400 truncate">
+                    {flag.checklist_title} &middot; {flag.team_name} &middot; {flag.outlet_name}
+                  </p>
+                </div>
+                {flag.description && (
+                  <p className="hidden lg:block text-xs text-gray-500 max-w-[200px] truncate">{flag.description}</p>
+                )}
+                <span className="shrink-0 text-xs text-gray-500 whitespace-nowrap">
+                  {timeAgo(flag.flagged_at)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {trends.data && trends.data.length > 0 && (
         <div className="bg-gray-800 rounded-lg p-6">

@@ -715,17 +715,6 @@ function SupervisorDashboard({ team, onLogout }) {
             )}
           </div>
 
-          {/* Enlarged Photo Modal */}
-          {enlargedPhoto && (
-            <div className="modal-overlay" onClick={closeEnlargedPhoto}>
-              <div className="photo-modal" onClick={e => e.stopPropagation()}>
-                <button className="photo-modal-close" onClick={closeEnlargedPhoto}>✕</button>
-                <img src={enlargedPhoto} alt="Full size" />
-                <p className="photo-modal-hint">Click anywhere to close</p>
-              </div>
-            </div>
-          )}
-
           {/* Items (read-only for verified/rejected checklists) */}
           {selectedChecklist.status === 'verified' && selectedChecklist.items?.length > 0 && (
             <div className="review-items-readonly">
@@ -918,9 +907,20 @@ function SupervisorDashboard({ team, onLogout }) {
           <SignaturePad
             onSave={handleSignatureSave}
             onCancel={handleSignatureCancel}
-            signedBy={supervisorName}
+            signedBy={signaturePadMode === 'acknowledge' ? acknowledgeName : supervisorName}
             title="Supervisor Signature"
           />
+        </div>
+      )}
+
+      {/* Enlarged Photo Modal */}
+      {enlargedPhoto && (
+        <div className="modal-overlay" onClick={closeEnlargedPhoto}>
+          <div className="photo-modal" onClick={e => e.stopPropagation()}>
+            <button className="photo-modal-close" onClick={closeEnlargedPhoto}>✕</button>
+            <img src={enlargedPhoto} alt="Full size" />
+            <p className="photo-modal-hint">Tap anywhere to close</p>
+          </div>
         </div>
       )}
 

@@ -8,6 +8,12 @@ function getPresetRange(preset) {
   const today = new Date();
   const to = formatDate(today);
   if (preset === 'today') return { from: to, to };
+  if (preset === 'yesterday') {
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yd = formatDate(yesterday);
+    return { from: yd, to: yd };
+  }
   if (preset === 'week') {
     const weekAgo = new Date(today);
     weekAgo.setDate(weekAgo.getDate() - 6);
@@ -25,6 +31,8 @@ function getActivePreset(dateFrom, dateTo) {
   const today = formatDate(new Date());
   if (!dateFrom && !dateTo) return '';
   if (dateFrom === today && dateTo === today) return 'today';
+  const yesterday = getPresetRange('yesterday');
+  if (dateFrom === yesterday.from && dateTo === yesterday.to) return 'yesterday';
   const week = getPresetRange('week');
   if (dateFrom === week.from && dateTo === week.to) return 'week';
   const month = getPresetRange('month');
@@ -49,6 +57,7 @@ export default function DateRangePicker() {
 
   const presets = [
     { key: 'today', label: 'Today' },
+    { key: 'yesterday', label: 'Yesterday' },
     { key: 'week', label: 'Week' },
     { key: 'month', label: 'Month' },
   ];
