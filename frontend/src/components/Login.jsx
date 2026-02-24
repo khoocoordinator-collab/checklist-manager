@@ -149,9 +149,9 @@ function Login({ onLogin }) {
       <div className="login-container">
         <div className="login-card login-card-wide">
           <div className="attestation-icon">&#x1F6E1;&#xFE0F;</div>
-          <h2>Attestation</h2>
+          <h2>PERHATIAN</h2>
           <p className="attestation-text">
-            Saya konfirmasi checklist ini sudah diisi dengan benar dan semua pekerjaan sudah dilakukan sesuai yang dicatat. Saya paham bahwa laporan palsu adalah pelanggaran serius terhadap kebijakan perusahaan.
+            Saya menyatakan bahwa setiap informasi yang saya catat di aplikasi ini akurat dan sesuai dengan pekerjaan yang benar-benar telah dilakukan. Saya memahami bahwa memberikan informasi palsu merupakan pelanggaran serius terhadap kebijakan perusahaan.
           </p>
           <button
             className="btn-login btn-attestation"
