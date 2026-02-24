@@ -5,6 +5,7 @@ import SignaturePad from './SignaturePad'
 function ChecklistForm({ checklist, team, onBack }) {
   const [items, setItems] = useState(checklist?.items || [])
   const [saved, setSaved] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
   const [activeFlagItem, setActiveFlagItem] = useState(null)
   const [flagDescription, setFlagDescription] = useState('')
   const [completedBy, setCompletedBy] = useState(checklist?.completed_by || '')
@@ -241,11 +242,17 @@ function ChecklistForm({ checklist, team, onBack }) {
     }
 
     localStorage.setItem(`pending_${team.id}`, JSON.stringify(pending))
-    setSaved(true)
-    setTimeout(() => {
-      setSaved(false)
-      onBack()
-    }, 800)
+
+    if (updatedChecklist.status === 'completed') {
+      setShowSuccess(true)
+      setTimeout(() => onBack(), 2500)
+    } else {
+      setSaved(true)
+      setTimeout(() => {
+        setSaved(false)
+        onBack()
+      }, 800)
+    }
   }
 
   const completedCount = items.filter(isItemComplete).length
@@ -871,6 +878,32 @@ const activeFlagItemData = items.find(i => i.id === activeFlagItem)
           >
             {saved ? '✓ Saved!' : 'Save Checklist'}
           </button>
+        </div>
+      )}
+
+      {/* Confetti Success Overlay */}
+      {showSuccess && (
+        <div className="success-overlay">
+          <div className="success-message">
+            <div className="success-checkmark">✓</div>
+            <p className="success-title">Checklist Complete!</p>
+            <p className="success-subtitle">Great work — submitted for review</p>
+          </div>
+          {Array.from({ length: 40 }, (_, i) => {
+            const colors = ['#3b82f6', '#8b5cf6', '#22c55e', '#f59e0b', '#ec4899']
+            return (
+              <div
+                key={i}
+                className="confetti-piece"
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  backgroundColor: colors[i % colors.length],
+                  animationDuration: `${1.5 + Math.random() * 1.5}s`,
+                  animationDelay: `${Math.random() * 0.6}s`,
+                }}
+              />
+            )
+          })}
         </div>
       )}
     </div>
