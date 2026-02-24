@@ -64,6 +64,8 @@ class ChecklistInstanceViewSet(viewsets.ModelViewSet):
         team_id = self.request.query_params.get('team')
         supervisor_team_id = self.request.query_params.get('supervisor_team')
         status_param = self.request.query_params.get('status')
+        date_param = self.request.query_params.get('date')
+        supervisor_signed_date = self.request.query_params.get('supervisor_signed_date')
 
         if team_id:
             queryset = queryset.filter(team_id=team_id)
@@ -78,6 +80,12 @@ class ChecklistInstanceViewSet(viewsets.ModelViewSet):
                 queryset = queryset.filter(status=statuses[0])
             else:
                 queryset = queryset.filter(status__in=statuses)
+
+        if date_param:
+            queryset = queryset.filter(date_label=date_param)
+
+        if supervisor_signed_date:
+            queryset = queryset.filter(supervisor_signed_at__date=supervisor_signed_date)
 
         return queryset
 
@@ -280,6 +288,9 @@ def pending_checklists(request):
     except Team.DoesNotExist:
         return Response({'error': 'Team not found'}, status=status.HTTP_404_NOT_FOUND)
 
+    # Default to today if no date param provided
+    date_param = request.query_params.get('date', timezone.now().strftime('%Y-%m-%d'))
+
     instance_prefetch = Prefetch(
         'items',
         queryset=InstanceItem.objects.prefetch_related(
@@ -300,7 +311,8 @@ def pending_checklists(request):
         awaiting = ChecklistInstance.objects.filter(
             status__in=['completed', 'resubmitted'],
             supervisor_signed_off=False,
-            team__outlet=team.outlet
+            team__outlet=team.outlet,
+            date_label=date_param
         ).select_related(
             'template__schedule', 'team__outlet', 'supervisor_team'
         ).prefetch_related('signature', instance_prefetch)
@@ -310,7 +322,8 @@ def pending_checklists(request):
     # For staff teams, return pending/rejected instances for this team
     pending = ChecklistInstance.objects.filter(
         team_id=team_id,
-        status__in=['draft', 'pending', 'rejected']
+        status__in=['draft', 'pending', 'rejected'],
+        date_label=date_param
     ).select_related(
         'template__schedule', 'team__outlet', 'supervisor_team'
     ).prefetch_related('signature', instance_prefetch)

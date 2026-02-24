@@ -94,7 +94,8 @@ function SupervisorDashboard({ team, onLogout }) {
     setLoading(true)
     try {
       // Fetch awaiting verification (pass role=supervisor so backend returns outlet-wide pending)
-      const response = await fetch(`${API_BASE}/api/pending/?team=${team.id}&role=supervisor`)
+      const today = new Date().toISOString().split('T')[0]
+      const response = await fetch(`${API_BASE}/api/pending/?team=${team.id}&role=supervisor&date=${today}`)
       if (response.ok) {
         const data = await response.json()
         setAwaitingVerification(data)
@@ -102,18 +103,10 @@ function SupervisorDashboard({ team, onLogout }) {
         console.error('Failed to load awaiting checklists')
       }
 
-      // Fetch verified today (filter by supervisor_team)
-      const today = new Date().toISOString().split('T')[0]
-      const verifiedResponse = await fetch(`${API_BASE}/api/instances/?status=verified&supervisor_team=${team.id}`)
+      // Fetch verified today (filter by supervisor_team and supervisor_signed_date)
+      const verifiedResponse = await fetch(`${API_BASE}/api/instances/?status=verified&supervisor_team=${team.id}&supervisor_signed_date=${today}`)
       if (verifiedResponse.ok) {
-        const allVerified = await verifiedResponse.json()
-        const todaysVerified = allVerified.filter(instance => {
-          if (instance.supervisor_signed_at) {
-            const signedDate = instance.supervisor_signed_at.split('T')[0]
-            return signedDate === today
-          }
-          return instance.date_label === today
-        })
+        const todaysVerified = await verifiedResponse.json()
         setVerifiedToday(todaysVerified)
       }
 

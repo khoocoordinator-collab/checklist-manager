@@ -88,8 +88,8 @@ function Dashboard({ team, onOpenChecklist, onPendingCountChange }) {
       // Fetch server-side pending + completed/verified/resubmitted in parallel
       const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
       const results = await Promise.allSettled([
-        fetch(`${API_BASE}/api/pending/?team=${team.id}`),
-        fetch(`${API_BASE}/api/instances/?team=${team.id}&status=completed,verified,resubmitted`)
+        fetch(`${API_BASE}/api/pending/?team=${team.id}&date=${today}`),
+        fetch(`${API_BASE}/api/instances/?team=${team.id}&status=completed,verified,resubmitted&date=${today}`)
       ])
 
       // Handle pending response
@@ -112,7 +112,6 @@ function Dashboard({ team, onOpenChecklist, onPendingCountChange }) {
       if (completedResult.status === 'fulfilled' && completedResult.value.ok) {
         const allData = await completedResult.value.json()
         const allCompletedToday = allData
-          .filter(instance => instance.date_label === today)
           .sort((a, b) => new Date(b.synced_at || b.created_at) - new Date(a.synced_at || a.created_at))
         setCompletedToday(allCompletedToday)
       }
