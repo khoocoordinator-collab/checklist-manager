@@ -102,34 +102,47 @@ export default function OverviewPage() {
             {flags.map(flag => (
               <div
                 key={flag.id}
-                className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 flex items-center gap-4"
+                className={`bg-gray-800 border rounded-lg px-4 py-3 ${
+                  flag.status === 'active' ? 'border-red-500/40' : 'border-green-500/30'
+                }`}
               >
-                <span
-                  className={`shrink-0 w-2 h-2 rounded-full ${
-                    flag.status === 'active' ? 'bg-red-400' : 'bg-green-400'
-                  }`}
-                />
-                {flag.photo_url && (
-                  <a href={flag.photo_url} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                    <img
-                      src={flag.photo_url}
-                      alt=""
-                      className="w-10 h-10 object-cover rounded border border-gray-600 hover:border-blue-500 transition-colors"
-                    />
-                  </a>
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-white truncate">{flag.item_text}</p>
-                  <p className="text-xs text-gray-400 truncate">
-                    {flag.checklist_title} &middot; {flag.team_name} &middot; {flag.outlet_name}
-                  </p>
+                <div className="flex items-start gap-3">
+                  <span
+                    className={`shrink-0 w-2 h-2 rounded-full mt-1.5 ${
+                      flag.status === 'active' ? 'bg-red-400' : 'bg-green-400'
+                    }`}
+                  />
+                  {flag.photo_url && (
+                    <a href={flag.photo_url} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                      <img
+                        src={flag.photo_url}
+                        alt=""
+                        className="w-10 h-10 object-cover rounded border border-gray-600 hover:border-blue-500 transition-colors"
+                      />
+                    </a>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-xs font-medium text-blue-400">{flag.outlet_name}</span>
+                      <span className="text-gray-600">&middot;</span>
+                      <span className="text-xs text-gray-400">{flag.team_name}</span>
+                    </div>
+                    {flag.description && (
+                      <p className="text-sm font-medium text-white">{flag.description}</p>
+                    )}
+                    <p className="text-sm text-gray-400">{flag.item_text}</p>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5 text-xs text-gray-500">
+                      <span className="text-gray-400">{flag.checklist_title}</span>
+                      {flag.flagged_by && (
+                        <span>Flagged by <span className="text-gray-300">{flag.flagged_by}</span></span>
+                      )}
+                      <span>{timeAgo(flag.flagged_at)}</span>
+                      {flag.status === 'acknowledged' && flag.acknowledged_by && (
+                        <span className="text-green-500">Ack'd by <span className="text-green-400">{flag.acknowledged_by}</span></span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                {flag.description && (
-                  <p className="hidden lg:block text-xs text-gray-500 max-w-[200px] truncate">{flag.description}</p>
-                )}
-                <span className="shrink-0 text-xs text-gray-500 whitespace-nowrap">
-                  {timeAgo(flag.flagged_at)}
-                </span>
               </div>
             ))}
           </div>

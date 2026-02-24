@@ -61,6 +61,8 @@ export default function FlaggedItemsPage() {
         );
       },
     },
+    { accessorKey: 'flagged_by', header: 'Flagged By' },
+    { accessorKey: 'acknowledged_by', header: 'Acknowledged By' },
     {
       accessorKey: 'flagged_at',
       header: 'Flagged',

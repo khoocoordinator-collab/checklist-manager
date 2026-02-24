@@ -241,6 +241,7 @@ def report_flagged_items(request):
             'date_label': inst.date_label,
             'team_name': inst.team.name if inst.team else '',
             'outlet_name': inst.team.outlet.name if inst.team and inst.team.outlet else '',
+            'flagged_by': inst.completed_by or '',
         })
 
     return Response(results)
